@@ -1,0 +1,105 @@
+/*
+ * Design tokens — straight from the Alproutes design canvas.
+ * Sizes are in rem with a 10px base at 1600px wide, so 1.4rem = 14px on the base screen.
+ */
+
+:root,
+:root[data-theme='dark'] {
+  --bg: #0a0b0d;
+  --surface: #0e1013;
+  --surface2: #14171c;
+  --raised: #1c1f25;
+  --line: #1f2229;
+  --line2: #2b2f37;
+  --text: #edeef0;
+  --text2: #c5c9d0;
+  --muted: #9aa0aa;
+  --faint: #7d838e;
+  --accent: #f08c50;
+  --accent-text: #f6b38a;
+  --accent-soft: rgba(240, 140, 80, 0.14);
+  --on-accent: #0a0b0d;
+  --blue: #2f6bff;
+  --blue-text: #6fa3ff;
+  --blue-hover: #9cc0ff;
+  --blue-soft: rgba(47, 107, 255, 0.16);
+  --map: #0c0f14;
+  --photo: #151a22;
+  --photo2: #1c2330;
+  --photo3: #2a3444;
+  --overlay: rgba(14, 16, 19, 0.92);
+  --tile-filter: invert(1) hue-rotate(180deg) brightness(0.82) contrast(0.92) saturate(0.55);
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #f5f4f1;
+  --surface: #ffffff;
+  --surface2: #f3f2ef;
+  --raised: #e8e6e1;
+  --line: #e4e2dc;
+  --line2: #d3d0c8;
+  --text: #15161a;
+  --text2: #3b3f46;
+  --muted: #5f636b;
+  --faint: #6e727a;
+  --accent: #ee8b52;
+  --accent-text: #b0561f;
+  --accent-soft: rgba(238, 139, 82, 0.16);
+  --on-accent: #15161a;
+  --blue: #2d62e6;
+  --blue-text: #2255d0;
+  --blue-hover: #173fa3;
+  --blue-soft: rgba(45, 98, 230, 0.12);
+  --map: #edf1f6;
+  --photo: #dde3eb;
+  --photo2: #c9d2de;
+  --photo3: #b5c0cf;
+  --overlay: rgba(255, 255, 255, 0.94);
+  --tile-filter: saturate(0.85);
+  color-scheme: light;
+}
+
+:root {
+  --font-display: 'Unbounded', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --header-h: 5.6rem;
+
+  /* Grid from the "1600 → 4K" board. */
+  --list-w: 360px;
+  --panel-w: 420px;
+  --extra-w: 0px;
+  --cards: 3;
+  --measure: 70ch;
+}
+
+html {
+  font-size: 62.5%; /* 10px: base font 14px = 1.4rem */
+}
+
+@media (min-width: 1920px) {
+  html { font-size: 66.964%; } /* base 15px */
+  :root { --list-w: 400px; --panel-w: 460px; --cards: 4; }
+}
+
+@media (min-width: 2560px) {
+  html { font-size: 75.893%; } /* base 17px */
+  :root { --list-w: 480px; --panel-w: 560px; --cards: 5; --measure: 72ch; }
+}
+
+@media (min-width: 3200px) {
+  html { font-size: 89.286%; } /* base 20px */
+  :root { --list-w: 560px; --panel-w: 640px; --extra-w: 640px; --cards: 6; --measure: 72ch; }
+}
+
+/* Below the 1600 design base: narrower columns, then a stacked layout. */
+@media (max-width: 1439px) {
+  :root { --list-w: 320px; --panel-w: 380px; }
+}
+@media (max-width: 1199px) {
+  :root { --cards: 2; }
+}
+@media (max-width: 759px) {
+  :root { --cards: 1; }
+}

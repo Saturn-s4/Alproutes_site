@@ -1,111 +1,26 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alproutes — веб-интерфейс</title>
+<meta name="description" content="Alproutes — каталог альпинистских маршрутов: карта, GPX-треки, архивные описания и отзывы.">
+<title>Alproutes</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'%3E%3Cpath d='M2 22 L10 8 L14 14 L17 10 L24 22 Z' fill='none' stroke='%23F08C50' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
-<style>
-:root{--bg:#0A0B0D;--surface:#0E1013;--surface2:#14171C;--line:#1F2229;--line2:#2B2F37;--text:#EDEEF0;--text2:#C5C9D0;--muted:#9AA0AA;--accent:#F08C50;--accent-text:#F6B38A;--blue-text:#6FA3FF}
-:root[data-theme="light"]{--bg:#F5F4F1;--surface:#FFFFFF;--surface2:#F3F2EF;--line:#E4E2DC;--line2:#D3D0C8;--text:#15161A;--text2:#3B3F46;--muted:#5F636B;--accent:#EE8B52;--accent-text:#B0561F;--blue-text:#2255D0}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif}
-a{color:inherit;text-decoration:none}
-header{display:flex;align-items:center;gap:12px;padding:20px 16px;border-bottom:1px solid var(--line);max-width:1440px;margin:0 auto}
-header .logo{font-family:Unbounded,sans-serif;font-weight:700;font-size:18px;letter-spacing:.02em}
-header .spacer{flex-grow:1}
-header button{height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--text2);font:inherit;font-size:14px;cursor:pointer}
-main{max-width:1440px;margin:0 auto;padding:32px 16px 64px}
-h1{font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(26px,4vw,40px);line-height:1.15;margin:0 0 12px}
-.lead{max-width:70ch;color:var(--text2);font-size:16px;line-height:1.55;margin:0 0 40px}
-h2{font-family:Unbounded,sans-serif;font-weight:500;font-size:18px;margin:40px 0 16px;color:var(--text)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
-.card{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);transition:border-color .15s}
-.card:hover,.card:focus-visible{border-color:var(--accent);outline:none}
-.thumb{position:relative;aspect-ratio:16/9;overflow:hidden;background:var(--surface2);border-bottom:1px solid var(--line)}
-.thumb iframe{position:absolute;top:0;left:0;border:0;transform-origin:0 0;pointer-events:none}
-.meta{padding:14px 16px;display:flex;flex-direction:column;gap:4px}
-.meta b{font-weight:600;font-size:15px}
-.meta span{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)}
-.meta .play{color:var(--accent-text)}
-footer{max-width:1440px;margin:0 auto;padding:24px 16px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
-</style>
+<script>
+  // Apply the saved theme before first paint to avoid a flash.
+  try {
+    var s = JSON.parse(localStorage.getItem('alproutes.settings') || '{}');
+    var t = s.theme === 'light' || s.theme === 'dark' ? s.theme
+      : (s.theme === 'system' && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
 </head>
 <body>
-<header>
-<svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true"><path d="M2 22 L10 8 L14 14 L17 10 L24 22 Z" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round"/></svg>
-<span class="logo">ALPROUTES</span>
-<span class="spacer"></span>
-<button type="button" id="theme">Светлая тема</button>
-</header>
-<main>
-<h1>Веб-интерфейс Alproutes</h1>
-<p class="lead">Все экраны из дизайна: три направления главной, страница маршрута, вход, добавление маршрута и профиль. Интерактивные экраны помечены «▶»: в шапке переключаются тема и язык, выбор запоминается между страницами.</p>
-<div id="groups"></div>
-</main>
-<footer>Экраны свёрстаны под 1600 px в ширину; правила адаптации до 4K — на экране «Адаптация 1600 → 4K».</footer>
-<script>
-(function () {
-  var groups = [
-    { title: 'Три направления · тёмная тема', items: [
-      ['Main', 'A · Карта в центре', 1600, 900, true],
-      ['VariantB', 'B · Каталог-журнал', 1600, 900, true],
-      ['VariantC', 'C · Технический / топо', 1600, 900, true]
-    ]},
-    { title: 'Те же экраны · светлая тема', items: [
-      ['LightMain', 'A · светлая тема', 1600, 900],
-      ['LightVariantB', 'B · светлая тема', 1600, 900],
-      ['LightVariantC', 'C · светлая тема', 1600, 900]
-    ]},
-    { title: 'Страница маршрута и правила адаптации', items: [
-      ['RouteA', 'Страница маршрута · тёмная', 1600, 1400, true],
-      ['LightRouteA', 'Страница маршрута · светлая', 1600, 1400],
-      ['Adaptive', 'Адаптация 1600 → 4K', 1600, 900]
-    ]},
-    { title: 'Остальные экраны', items: [
-      ['Login', 'Вход и регистрация', 1600, 900, true],
-      ['Upload', 'Добавление маршрута', 1600, 1500, true],
-      ['Profile', 'Профиль и настройки', 1600, 900, true]
-    ]}
-  ];
-  var host = document.getElementById('groups');
-  groups.forEach(function (g) {
-    var h = document.createElement('h2'); h.textContent = g.title; host.appendChild(h);
-    var grid = document.createElement('div'); grid.className = 'grid'; host.appendChild(grid);
-    g.items.forEach(function (it) {
-      var a = document.createElement('a');
-      a.className = 'card'; a.href = it[0] + '.dc.html';
-      a.innerHTML = '<div class="thumb"><iframe loading="lazy" tabindex="-1" aria-hidden="true"></iframe></div>' +
-        '<div class="meta"><b></b><span></span></div>';
-      var f = a.querySelector('iframe');
-      f.src = it[0] + '.dc.html'; f.width = it[2]; f.height = it[3];
-      a.querySelector('b').textContent = it[1];
-      a.querySelector('span').innerHTML = it[2] + ' × ' + it[3] + (it[4] ? ' · <span class="play">▶ интерактивный</span>' : '');
-      grid.appendChild(a);
-    });
-  });
-  function fit() {
-    document.querySelectorAll('.thumb').forEach(function (t) {
-      var f = t.firstChild; f.style.transform = 'scale(' + (t.clientWidth / f.width) + ')';
-    });
-  }
-  window.addEventListener('resize', fit); fit();
-
-  var btn = document.getElementById('theme');
-  function get() { try { return localStorage.getItem('alproutes.theme') || 'dark'; } catch (e) { return 'dark'; } }
-  function apply(t) {
-    document.documentElement.setAttribute('data-theme', t);
-    btn.textContent = t === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-  }
-  apply(get());
-  btn.addEventListener('click', function () {
-    var t = get() === 'dark' ? 'light' : 'dark';
-    try { localStorage.setItem('alproutes.theme', t); } catch (e) {}
-    apply(t);
-    document.querySelectorAll('.thumb iframe').forEach(function (f) { if (!/Light/.test(f.src)) f.src = f.src; });
-  });
-})();
-</script>
+<div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
