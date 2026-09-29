@@ -1,0 +1,8 @@
+# Keep LF in the working tree regardless of core.autocrlf: gradlew and SQL/YAML
+# files are also used inside Linux containers.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.jar binary
+*.png binary
+*.jpg binary
