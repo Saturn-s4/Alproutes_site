@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: alproutes
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/alproutes}
+    username: ${DB_USER:alproutes}
+    password: ${DB_PASSWORD:alproutes}
+  flyway:
+    locations: classpath:db/migration
+  jackson:
+    default-property-inclusion: always
+    deserialization:
+      fail-on-unknown-properties: true
+
+server:
+  servlet:
+    context-path: /api/v1
+  error:
+    whitelabel:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+alproutes:
+  auth:
+    # HS256 secret for our own access tokens, at least 32 bytes. MUST be overridden outside dev.
+    jwt-secret: ${JWT_SECRET:}
+    issuer: alproutes
+    access-token-ttl: 15m
+    refresh-token-ttl: 60d
+    google-client-ids: ${GOOGLE_CLIENT_IDS:}
+    apple-client-ids: ${APPLE_CLIENT_IDS:}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  s3:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    # Endpoint put into pre-signed URLs, i.e. as seen by the browser/app.
+    public-endpoint: ${S3_PUBLIC_ENDPOINT:http://localhost:9000}
+    region: ${S3_REGION:us-east-1}
+    bucket: ${S3_BUCKET:alproutes-media}
+    access-key: ${S3_ACCESS_KEY:alproutes}
+    secret-key: ${S3_SECRET_KEY:alproutes-secret}
+    path-style: true
+    upload-url-ttl: 15m

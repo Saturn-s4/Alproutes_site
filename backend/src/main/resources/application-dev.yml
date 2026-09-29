@@ -1,0 +1,6 @@
+# Local development: `./gradlew bootRun --args='--spring.profiles.active=dev'`
+alproutes:
+  auth:
+    jwt-secret: dev-only-secret-change-me-0123456789abcdef
+  cors:
+    allowed-origins: http://localhost:3000

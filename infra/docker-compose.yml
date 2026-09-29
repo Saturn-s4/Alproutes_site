@@ -1,0 +1,69 @@
+# Local infrastructure: PostgreSQL 16 + PostGIS 3, MinIO (S3), Flyway for migrations.
+#
+#   docker compose -f infra/docker-compose.yml up -d                     # db + minio
+#   docker compose -f infra/docker-compose.yml run --rm flyway migrate   # apply migrations
+#
+# Credentials below are for local development only.
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: alproutes
+      POSTGRES_USER: alproutes
+      POSTGRES_PASSWORD: alproutes
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/tests:/db-tests:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alproutes -d alproutes"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: alproutes
+      MINIO_ROOT_PASSWORD: alproutes-secret
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - minio-data:/data
+
+  # Creates the bucket once MinIO is up.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 alproutes alproutes-secret; do sleep 1; done;
+      mc mb --ignore-existing local/alproutes-media;
+      "
+
+  # Not started by `up`: run explicitly (see header). The backend will also run
+  # Flyway on start-up; this service is for applying/checking migrations without it.
+  flyway:
+    image: flyway/flyway:10
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    # Connection via env, so any Flyway command can be passed: migrate, info, validate.
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/alproutes
+      FLYWAY_USER: alproutes
+      FLYWAY_PASSWORD: alproutes
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+    command: migrate
+    volumes:
+      - ./db/migration:/flyway/sql:ro
+
+volumes:
+  db-data:
+  minio-data:

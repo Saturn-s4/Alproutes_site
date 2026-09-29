@@ -1,0 +1,2642 @@
+openapi: 3.0.3
+info:
+  title: AlpRoutes API
+  version: 0.1.0
+  description: |
+    Единый API для Android- и веб-клиента каталога альпинистских маршрутов.
+    Этот файл — источник истины: клиентские модели генерируются из него.
+
+    ## Общие правила
+
+    * **Геометрия** — GeoJSON, EPSG:4326, порядок координат `[lon, lat]` или `[lon, lat, ele]`.
+      `bbox` в запросах — `minLon,minLat,maxLon,maxLat`.
+    * **Пагинация** — у любого списка. Курсорная: `cursor` + `limit` (1–100, по умолчанию 20),
+      в ответе `nextCursor` (null — страниц больше нет). Курсор непрозрачный.
+    * **Мультиязычность** — тексты каталога (`LocalizedText`) приходят целиком, со всеми
+      переводами: `{"ru": "...", "en": "..."}`. Язык выбирает клиент
+      (порядок: язык интерфейса → `ru` → любой имеющийся). Пользовательский контент
+      (комментарии, отчёты) не переводится и несёт поле `language`.
+    * **Отсутствующие данные** — `null` означает «нет данных». Клиент показывает «нет данных»,
+      а не ноль и не прочерк, похожий на значение. Сервер никогда не подставляет оценку.
+    * **Категории сложности** — всегда пара `{system, value}`, у маршрута может быть несколько,
+      не больше одной на систему. Конвертации между системами в API нет и не будет.
+    * **Офлайн-запись.** Всё, что пользователь создаёт (восхождения, комментарии, фото, треки),
+      создаётся с `id`, сгенерированным на клиенте (UUID). Повтор того же запроса с тем же `id`
+      идемпотентен: `200` с существующим объектом вместо `201`. Тот же `id` у чужого объекта — `409`.
+    * **Файлы** не идут через backend: `POST /uploads` выдаёт pre-signed URL, клиент кладёт файл
+      прямо в S3, затем создаёт сущность со ссылкой на `uploadId`.
+    * **Ошибки** — `application/problem+json` (RFC 9457).
+    * **Даты** — ISO 8601, время в UTC.
+servers:
+  - url: /api/v1
+tags:
+  - name: auth
+  - name: reference
+    description: Справочники
+  - name: areas
+    description: Районы, массивы, вершины
+  - name: routes
+    description: Маршруты и их ревизии
+  - name: uploads
+  - name: photos
+    description: Фото и прорисовка нитки
+  - name: tracks
+    description: GPX/KML-треки
+  - name: documents
+    description: Архивные PDF-описания
+  - name: ascents
+    description: Записи о восхождениях
+  - name: comments
+  - name: users
+  - name: moderation
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------- auth
+  /auth/oauth/{provider}:
+    post:
+      tags: [auth]
+      operationId: loginWithOAuth
+      summary: Вход через Google или Apple
+      description: |
+        Клиент получает ID token у провайдера и передаёт его сюда. Сервер проверяет подпись,
+        находит или создаёт пользователя и выдаёт пару токенов.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, apple]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthLoginRequest' }
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /auth/dev-login:
+    post:
+      tags: [auth]
+      operationId: devLogin
+      summary: Вход без OAuth (только локальная разработка)
+      description: |
+        Существует только в профиле `dev`; в остальных окружениях эндпоинт не зарегистрирован (`404`).
+        Находит пользователя по email или создаёт его, назначает указанную роль.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DevLoginRequest' }
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshTokens
+      summary: Обновить пару токенов
+      description: |
+        Ротация: старый refresh token становится недействительным. Повторное предъявление
+        уже использованного токена отзывает всю цепочку (признак кражи) — клиент должен
+        выполнить вход заново. Исключение — повтор в течение 30 секунд после ротации
+        (два параллельных запроса одного клиента): `401` без отзыва цепочки.
+        Клиент обязан выполнять обновление в один поток.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: Новая пара токенов
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: Выйти (отозвать refresh token)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '204': { description: Токен отозван }
+
+  /me:
+    get:
+      tags: [users]
+      operationId: getMe
+      summary: Текущий пользователь
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [users]
+      operationId: updateMe
+      summary: Изменить свой профиль
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ----------------------------------------------------------- reference
+  /grade-systems:
+    get:
+      tags: [reference]
+      operationId: listGradeSystems
+      summary: Системы категорий и допустимые значения
+      description: |
+        Клиенты берут значения только отсюда и не вводят их вручную
+        (в российской системе буквы кириллические: «5Б», а не «5B»).
+        Ответ редко меняется — кэшировать.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GradeSystemPage' }
+
+  # --------------------------------------------------------------- areas
+  /areas:
+    get:
+      tags: [areas]
+      operationId: listAreas
+      summary: Список районов
+      description: Без `parentId` и `q` возвращает корневые районы.
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - name: parentId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/AreaType' }
+        - $ref: '#/components/parameters/SearchQuery'
+        - $ref: '#/components/parameters/Bbox'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AreaPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [areas]
+      operationId: createArea
+      summary: Создать район (модератор)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AreaCreate' }
+      responses:
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Area' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /areas/{areaId}:
+    parameters:
+      - $ref: '#/components/parameters/AreaId'
+    get:
+      tags: [areas]
+      operationId: getArea
+      summary: Район
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Area' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [areas]
+      operationId: updateArea
+      summary: Изменить район (модератор)
+      description: Передаются только изменяемые поля. `null` очищает поле.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AreaUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Area' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /areas/by-slug/{slug}:
+    get:
+      tags: [areas]
+      operationId: getAreaBySlug
+      summary: Район по slug (для SSR-страниц)
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Area' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /areas/{areaId}/photos:
+    parameters:
+      - $ref: '#/components/parameters/AreaId'
+    get:
+      tags: [photos]
+      operationId: listAreaPhotos
+      summary: Фото района
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PhotoKind'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PhotoPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [photos]
+      operationId: createAreaPhoto
+      summary: Добавить фото к району
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PhotoCreate' }
+      responses:
+        '200': { $ref: '#/components/responses/PhotoExisting' }
+        '201': { $ref: '#/components/responses/PhotoCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /areas/{areaId}/documents:
+    parameters:
+      - $ref: '#/components/parameters/AreaId'
+    get:
+      tags: [documents]
+      operationId: listAreaDocuments
+      summary: Архивные описания района
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [documents]
+      operationId: createAreaDocument
+      summary: Загрузить архивное описание района
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentCreate' }
+      responses:
+        '201':
+          description: Создано; скрыто до проверки правового статуса
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -------------------------------------------------------------- routes
+  /routes:
+    get:
+      tags: [routes]
+      operationId: listRoutes
+      summary: Поиск маршрутов
+      description: |
+        Все фильтры комбинируются через И. Геофильтры выполняются в PostGIS.
+        `bbox` ищет по всем геообъектам маршрута (маршрут попадает в окно, даже если
+        в нём виден только подход), `near` — по точке маркера (`anchorPoint`).
+        Маршруты без геометрии в гео-выдачу не попадают.
+        Фильтр по категории работает только внутри одной системы:
+        `gradeSystem=RU&gradeMin=4А&gradeMax=5Б`. Маршруты без категории в этой системе
+        в выдачу не попадают — клиент должен сообщать об этом пользователю.
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Bbox'
+        - name: near
+          in: query
+          description: Точка `lon,lat`; вместе с `radiusM`. Сортирует по расстоянию.
+          schema: { type: string, example: '43.0,43.1' }
+        - name: radiusM
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200000 }
+        - name: areaId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: includeSubareas
+          in: query
+          description: Включать маршруты вложенных районов
+          schema: { type: boolean, default: true }
+        - $ref: '#/components/parameters/SearchQuery'
+        - name: gradeSystem
+          in: query
+          schema: { $ref: '#/components/schemas/GradeSystemCode' }
+        - name: gradeMin
+          in: query
+          description: Требует `gradeSystem`
+          schema: { type: string }
+        - name: gradeMax
+          in: query
+          description: Требует `gradeSystem`
+          schema: { type: string }
+        - name: routeType
+          in: query
+          schema: { $ref: '#/components/schemas/RouteType' }
+        - name: sort
+          in: query
+          description: При `near` по умолчанию `distance`, при `q` — `relevance`, иначе `name`.
+          schema:
+            type: string
+            enum: [name, grade, updated, distance, relevance]
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteSummaryPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [routes]
+      operationId: createRoute
+      summary: Предложить новый маршрут
+      description: Создаёт маршрут в статусе `draft` и первую ревизию в статусе `pending`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RouteCreate' }
+      responses:
+        '201':
+          description: Создано, ожидает модерации
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteRevision' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /routes/map-points:
+    get:
+      tags: [routes]
+      operationId: listRouteMapPoints
+      summary: Облегчённые точки маршрутов для карты
+      description: Минимум полей для маркеров (`anchorPoint`). Маршруты без геометрии не возвращаются. Лимит страницы выше обычного.
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - name: bbox
+          in: query
+          required: true
+          schema: { type: string, example: '42.9,43.0,43.3,43.2' }
+        - $ref: '#/components/parameters/Cursor'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteMapPointPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /routes/{routeId}:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      tags: [routes]
+      operationId: getRoute
+      summary: Карточка маршрута (текущая опубликованная ревизия)
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /routes/by-slug/{slug}:
+    get:
+      tags: [routes]
+      operationId: getRouteBySlug
+      summary: Карточка маршрута по slug (для SSR-страниц)
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /routes/{routeId}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      tags: [routes]
+      operationId: listRouteRevisions
+      summary: История правок маршрута
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ReviewStatus' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, новые сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteRevisionSummaryPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [routes]
+      operationId: proposeRouteRevision
+      summary: Предложить правку маршрута
+      description: |
+        Правка — полный снимок маршрута, а не дифф. `baseRevisionId` — ревизия, от которой
+        автор начал редактирование. Если с тех пор опубликована другая, ответ `409`
+        с `currentRevisionId`: клиент показывает автору изменения и просит слить вручную.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RouteRevisionCreate' }
+      responses:
+        '201':
+          description: Создано, ожидает модерации
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteRevision' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /route-revisions/{revisionId}:
+    parameters:
+      - $ref: '#/components/parameters/RevisionId'
+    get:
+      tags: [routes]
+      operationId: getRouteRevision
+      summary: Ревизия маршрута целиком
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteRevision' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /route-revisions/{revisionId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/RevisionId'
+    post:
+      tags: [moderation]
+      operationId: approveRouteRevision
+      summary: Одобрить и опубликовать ревизию (модератор)
+      description: |
+        Ревизия становится текущей, маршрут — `published`. Если с момента создания правки
+        опубликована другая ревизия (её `baseRevisionId` устарел), — `409` с `type = revision-stale`:
+        одобрение затёрло бы чужие изменения. Такую правку нужно отклонить или пересоздать.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewDecision' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteRevision' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /route-revisions/{revisionId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/RevisionId'
+    post:
+      tags: [moderation]
+      operationId: rejectRouteRevision
+      summary: Отклонить ревизию (модератор)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewDecisionWithNote' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteRevision' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /route-revisions/{revisionId}/revert:
+    parameters:
+      - $ref: '#/components/parameters/RevisionId'
+    post:
+      tags: [moderation]
+      operationId: revertToRouteRevision
+      summary: Откатить маршрут к этой ревизии (модератор)
+      description: |
+        Создаёт НОВУЮ ревизию — копию указанной — и сразу публикует её.
+        История не переписывается.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewDecisionWithNote' }
+      responses:
+        '201':
+          description: Новая текущая ревизия
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteRevision' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # ------------------------------------------------------------- uploads
+  /uploads:
+    post:
+      tags: [uploads]
+      operationId: createUpload
+      summary: Получить pre-signed URL для загрузки файла в S3
+      description: |
+        Клиент делает `PUT` на `url` с заголовками из `headers`, после чего создаёт сущность
+        (фото, трек, документ) с этим `uploadId`. Незадействованные загрузки удаляются
+        после `expiresAt`. Для офлайн-очереди Android: слот запрашивается при появлении сети,
+        не заранее — URL живёт недолго.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UploadRequest' }
+      responses:
+        '201':
+          description: Слот для загрузки
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UploadSlot' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413':
+          description: Файл больше допустимого размера
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  # -------------------------------------------------------------- photos
+  /routes/{routeId}/photos:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      tags: [photos]
+      operationId: listRoutePhotos
+      summary: Фото маршрута (вместе с текущими прорисовками)
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PhotoKind'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PhotoPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [photos]
+      operationId: createRoutePhoto
+      summary: Добавить фото к маршруту
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PhotoCreate' }
+      responses:
+        '200': { $ref: '#/components/responses/PhotoExisting' }
+        '201': { $ref: '#/components/responses/PhotoCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /photos/{photoId}:
+    parameters:
+      - $ref: '#/components/parameters/PhotoId'
+    get:
+      tags: [photos]
+      operationId: getPhoto
+      summary: Фото
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Photo' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [photos]
+      operationId: updatePhoto
+      summary: Изменить подпись или тип фото (автор)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PhotoUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Photo' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [photos]
+      operationId: deletePhoto
+      summary: Удалить фото (автор)
+      responses:
+        '204': { description: Удалено }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /photos/{photoId}/topo-lines/{routeId}/versions:
+    parameters:
+      - $ref: '#/components/parameters/PhotoId'
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      tags: [photos]
+      operationId: listTopoLineVersions
+      summary: История прорисовки маршрута на фото
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, новые сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopoLinePage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [photos]
+      operationId: proposeTopoLine
+      summary: Предложить (новую версию) прорисовки
+      description: |
+        Как и ревизии маршрута: версия — полный рисунок; при устаревшем `baseVersionId` — `409`.
+        Фото должно быть типа `topo`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TopoLineCreate' }
+      responses:
+        '201':
+          description: Создано, ожидает модерации
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopoLine' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /topo-lines/{topoLineId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/TopoLineId'
+    post:
+      tags: [moderation]
+      operationId: approveTopoLine
+      summary: Одобрить прорисовку (модератор)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewDecision' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopoLine' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /topo-lines/{topoLineId}/reject:
+    parameters:
+      - $ref: '#/components/parameters/TopoLineId'
+    post:
+      tags: [moderation]
+      operationId: rejectTopoLine
+      summary: Отклонить прорисовку (модератор)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReviewDecisionWithNote' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopoLine' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # -------------------------------------------------------------- tracks
+  /routes/{routeId}/tracks:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      tags: [tracks]
+      operationId: listRouteTracks
+      summary: Треки маршрута
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrackPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [tracks]
+      operationId: createRouteTrack
+      summary: Добавить GPX/KML-трек
+      description: Формат определяется по содержимому файла при обработке.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TrackCreate' }
+      responses:
+        '200':
+          description: Трек с таким `id` уже создан этим пользователем
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Track' }
+        '201':
+          description: Создано, обрабатывается
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Track' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /tracks/{trackId}:
+    parameters:
+      - $ref: '#/components/parameters/TrackId'
+    get:
+      tags: [tracks]
+      operationId: getTrack
+      summary: Трек (метаданные и статистика)
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Track' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [tracks]
+      operationId: updateTrack
+      summary: Изменить описание трека (автор)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TrackUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Track' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [tracks]
+      operationId: deleteTrack
+      summary: Удалить трек (автор)
+      responses:
+        '204': { description: Удалено }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /tracks/{trackId}/geometry:
+    parameters:
+      - $ref: '#/components/parameters/TrackId'
+    get:
+      tags: [tracks]
+      operationId: getTrackGeometry
+      summary: Геометрия трека (GeoJSON) для карты
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/geo+json:
+              schema: { $ref: '#/components/schemas/GeoJsonMultiLineString' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Трек ещё обрабатывается или обработка не удалась
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /tracks/{trackId}/profile:
+    parameters:
+      - $ref: '#/components/parameters/TrackId'
+    get:
+      tags: [tracks]
+      operationId: getTrackElevationProfile
+      summary: Сглаженный профиль высот
+      description: |
+        Строится на сервере по сглаженным данным и, где возможно, сверяется с DEM.
+        Сырые высоты из GPX клиентам не отдаются: барометрические и GPS-высоты расходятся сильно.
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ElevationProfile' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Трек ещё обрабатывается или обработка не удалась
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /tracks/{trackId}/download:
+    parameters:
+      - $ref: '#/components/parameters/TrackId'
+    get:
+      tags: [tracks]
+      operationId: downloadTrack
+      summary: Скачать исходный файл трека
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '302': { $ref: '#/components/responses/RedirectToFile' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ----------------------------------------------------------- documents
+  /routes/{routeId}/documents:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      tags: [documents]
+      operationId: listRouteDocuments
+      summary: Архивные описания маршрута
+      description: Обычные пользователи видят только документы с выясненным правовым статусом.
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [documents]
+      operationId: createRouteDocument
+      summary: Загрузить архивное описание маршрута
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentCreate' }
+      responses:
+        '201':
+          description: Создано; скрыто до проверки правового статуса
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /documents/{documentId}:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      tags: [documents]
+      operationId: getDocument
+      summary: Архивное описание (метаданные)
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /documents/{documentId}/rights:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    put:
+      tags: [moderation]
+      operationId: setDocumentRights
+      summary: Установить правовой статус и видимость (модератор)
+      description: |
+        Сделать документ видимым можно только со статусом `public_domain`, `licensed`,
+        `permission_granted` или `own_work`; для `licensed` и `permission_granted`
+        обязателен `rightsNote`. Иначе `400` (то же ограничение продублировано в БД).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentRightsUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /documents/{documentId}/download:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      tags: [documents]
+      operationId: downloadDocument
+      summary: Скачать PDF
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '302': { $ref: '#/components/responses/RedirectToFile' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '451':
+          description: Недоступно по правовым причинам (статус прав не выяснен или ограничен)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  # ------------------------------------------------------------- ascents
+  /routes/{routeId}/ascents:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      tags: [ascents]
+      operationId: listRouteAscents
+      summary: Восхождения по маршруту (публичные)
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, свежие сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AscentPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [ascents]
+      operationId: createAscent
+      summary: Добавить запись о восхождении
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AscentCreate' }
+      responses:
+        '200':
+          description: Запись с таким `id` уже создана этим пользователем
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ascent' }
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ascent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /ascents/{ascentId}:
+    parameters:
+      - $ref: '#/components/parameters/AscentId'
+    get:
+      tags: [ascents]
+      operationId: getAscent
+      summary: Запись о восхождении
+      description: Приватная запись видна только автору (остальным — `404`).
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ascent' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [ascents]
+      operationId: updateAscent
+      summary: Заменить запись о восхождении (автор)
+      description: Полная замена — проще для офлайн-очереди, чем частичные патчи.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AscentFields' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ascent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [ascents]
+      operationId: deleteAscent
+      summary: Удалить запись (автор)
+      responses:
+        '204': { description: Удалено }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/{userId}/ascents:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [ascents]
+      operationId: listUserAscents
+      summary: Восхождения пользователя
+      description: Автор видит и свои приватные записи.
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, свежие сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AscentPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ------------------------------------------------------------ comments
+  /routes/{routeId}/comments:
+    parameters:
+      - $ref: '#/components/parameters/RouteId'
+    get:
+      tags: [comments]
+      operationId: listRouteComments
+      summary: Комментарии к маршруту
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, по времени создания
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [comments]
+      operationId: createRouteComment
+      summary: Прокомментировать маршрут
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentCreate' }
+      responses:
+        '200': { $ref: '#/components/responses/CommentExisting' }
+        '201': { $ref: '#/components/responses/CommentCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /ascents/{ascentId}/comments:
+    parameters:
+      - $ref: '#/components/parameters/AscentId'
+    get:
+      tags: [comments]
+      operationId: listAscentComments
+      summary: Комментарии к восхождению
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, по времени создания
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentPage' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [comments]
+      operationId: createAscentComment
+      summary: Прокомментировать восхождение
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentCreate' }
+      responses:
+        '200': { $ref: '#/components/responses/CommentExisting' }
+        '201': { $ref: '#/components/responses/CommentCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /comments/{commentId}:
+    parameters:
+      - $ref: '#/components/parameters/CommentId'
+    patch:
+      tags: [comments]
+      operationId: updateComment
+      summary: Исправить комментарий (автор)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentUpdate' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [comments]
+      operationId: deleteComment
+      summary: Удалить комментарий (автор)
+      description: В ветке остаётся заглушка `isDeleted = true` без текста, чтобы не рвать ответы.
+      responses:
+        '204': { description: Удалено }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # --------------------------------------------------------------- users
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [users]
+      operationId: getUser
+      summary: Публичный профиль
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserPublic' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------------------------------------------------------- moderation
+  /flags:
+    post:
+      tags: [moderation]
+      operationId: createFlag
+      summary: Пожаловаться на контент
+      description: Повторная жалоба того же пользователя на тот же объект, пока первая открыта, возвращает существующую.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FlagCreate' }
+      responses:
+        '200':
+          description: Открытая жалоба уже есть
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Flag' }
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Flag' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /moderation/flags:
+    get:
+      tags: [moderation]
+      operationId: listFlags
+      summary: Очередь жалоб (модератор)
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/FlagStatus' }
+        - name: targetType
+          in: query
+          schema: { $ref: '#/components/schemas/ModerationTargetType' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, старые сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlagPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /moderation/flags/{flagId}/resolve:
+    parameters:
+      - name: flagId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [moderation]
+      operationId: resolveFlag
+      summary: Закрыть жалобу (модератор)
+      description: Скрытие самого объекта — отдельным вызовом `POST /moderation/visibility`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FlagResolve' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Flag' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /moderation/route-revisions:
+    get:
+      tags: [moderation]
+      operationId: listPendingRouteRevisions
+      summary: Правки маршрутов на проверке (модератор)
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, старые сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteRevisionSummaryPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /moderation/topo-lines:
+    get:
+      tags: [moderation]
+      operationId: listPendingTopoLines
+      summary: Прорисовки на проверке (модератор)
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, старые сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopoLinePage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /moderation/documents:
+    get:
+      tags: [moderation]
+      operationId: listDocumentsAwaitingRights
+      summary: Документы без проверенного правового статуса (модератор)
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, старые сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DocumentPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /moderation/visibility:
+    post:
+      tags: [moderation]
+      operationId: setContentVisibility
+      summary: Скрыть или вернуть контент (модератор)
+      description: Действие записывается в журнал модерации.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VisibilityChange' }
+      responses:
+        '204': { description: OK }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /moderation/log:
+    get:
+      tags: [moderation]
+      operationId: listModerationLog
+      summary: Журнал действий модераторов
+      parameters:
+        - name: targetType
+          in: query
+          schema: { $ref: '#/components/schemas/ModerationTargetType' }
+        - name: targetId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: actorId
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: OK, новые сверху
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ModerationLogPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token из `TokenPair`. Живёт недолго, обновляется через `/auth/refresh`.
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      description: Непрозрачный курсор из `nextCursor` предыдущей страницы
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    SearchQuery:
+      name: q
+      in: query
+      description: Поиск по названию на всех языках (триграммы), минимум 2 символа
+      schema: { type: string, minLength: 2, maxLength: 100 }
+    Bbox:
+      name: bbox
+      in: query
+      description: '`minLon,minLat,maxLon,maxLat` в EPSG:4326'
+      schema: { type: string, example: '42.9,43.0,43.3,43.2' }
+    Slug:
+      name: slug
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Slug' }
+    PhotoKind:
+      name: kind
+      in: query
+      schema: { $ref: '#/components/schemas/PhotoKind' }
+    AreaId:
+      name: areaId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RouteId:
+      name: routeId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RevisionId:
+      name: revisionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PhotoId:
+      name: photoId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TopoLineId:
+      name: topoLineId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TrackId:
+      name: trackId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AscentId:
+      name: ascentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CommentId:
+      name: commentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Нужна аутентификация или токен недействителен
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Не найдено
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: |
+        Конфликт: занятый slug, чужой объект с тем же `id`, устаревшая базовая ревизия
+        (тогда в `Problem.currentRevisionId` — актуальная) или недопустимый переход статуса.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RedirectToFile:
+      description: Редирект на временную ссылку на файл в S3
+      headers:
+        Location:
+          required: true
+          schema: { type: string, format: uri }
+    PhotoCreated:
+      description: Создано, обрабатывается
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Photo' }
+    PhotoExisting:
+      description: Фото с таким `id` уже создано этим пользователем
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Photo' }
+    CommentCreated:
+      description: Создано
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Comment' }
+    CommentExisting:
+      description: Комментарий с таким `id` уже создан этим пользователем
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Comment' }
+
+  schemas:
+    # ------------------------------------------------------------ common
+    Problem:
+      type: object
+      description: |
+        RFC 9457. Значения `type`: `validation-error`, `unauthorized`, `forbidden`, `not-found`,
+        `conflict`, `slug-taken`, `revision-conflict`, `revision-stale`, `invalid-state`,
+        `track-not-contiguous`, `payload-too-large`, `internal-error`.
+      required: [type, title, status]
+      properties:
+        type: { type: string, description: 'Машиночитаемый код, например `revision-conflict`' }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: array
+          items: { $ref: '#/components/schemas/FieldError' }
+        currentRevisionId:
+          type: string
+          format: uuid
+          description: Только для `revision-conflict`
+    FieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field: { type: string, example: 'content.grades[0].value' }
+        message: { type: string }
+
+    Slug:
+      type: string
+      pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+      maxLength: 120
+      example: dykh-tau-mummery
+
+    LocalizedText:
+      type: object
+      description: |
+        Переводы текста: ключ — код языка ISO 639-1 (`ru`, `en`, ...), значение — непустая строка.
+        Хотя бы один перевод.
+      minProperties: 1
+      additionalProperties: { type: string, minLength: 1 }
+      example: { ru: Дых-Тау, en: Dykh-Tau }
+
+    Visibility:
+      type: string
+      enum: [visible, hidden]
+    ProcessingStatus:
+      type: string
+      enum: [processing, ready, failed]
+    ReviewStatus:
+      type: string
+      enum: [pending, approved, rejected]
+    LanguageCode:
+      type: string
+      pattern: '^[a-z]{2}$'
+      example: ru
+
+    # ------------------------------------------------------------ geojson
+    Position:
+      type: array
+      description: '`[lon, lat]` или `[lon, lat, ele]`, высота в метрах. Используется для треков и контуров.'
+      minItems: 2
+      maxItems: 3
+      items: { type: number, format: double }
+      example: [43.1003, 43.0342, 5205]
+    Position2D:
+      type: array
+      description: '`[lon, lat]`. Высоты у точек и нарисованных линий не хранятся.'
+      minItems: 2
+      maxItems: 2
+      items: { type: number, format: double }
+      example: [43.1003, 43.0342]
+    GeoJsonPoint:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [Point] }
+        coordinates: { $ref: '#/components/schemas/Position2D' }
+    GeoJsonLineString:
+      type: object
+      description: 2D-линия. Профиль высот строится по DEM или GPX-треку, не по линии.
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [LineString] }
+        coordinates:
+          type: array
+          minItems: 2
+          maxItems: 10000
+          items: { $ref: '#/components/schemas/Position2D' }
+    GeoJsonMultiLineString:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [MultiLineString] }
+        coordinates:
+          type: array
+          items:
+            type: array
+            minItems: 2
+            items: { $ref: '#/components/schemas/Position' }
+    GeoJsonMultiPolygon:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [MultiPolygon] }
+        coordinates:
+          type: array
+          items:
+            type: array
+            items:
+              type: array
+              minItems: 4
+              items: { $ref: '#/components/schemas/Position' }
+
+    # --------------------------------------------------------------- auth
+    OAuthLoginRequest:
+      type: object
+      required: [idToken]
+      properties:
+        idToken: { type: string }
+        nonce: { type: string, description: 'Nonce, использованный при запросе токена (Apple)' }
+        displayName:
+          type: string
+          maxLength: 100
+          description: Apple отдаёт имя только при первом входе — клиент передаёт его сюда
+    DevLoginRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+        displayName: { type: string, minLength: 1, maxLength: 100 }
+        role: { $ref: '#/components/schemas/UserRole' }
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+    TokenPair:
+      type: object
+      required: [accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, user]
+      properties:
+        accessToken: { type: string }
+        accessTokenExpiresAt: { type: string, format: date-time }
+        refreshToken: { type: string }
+        refreshTokenExpiresAt: { type: string, format: date-time }
+        user: { $ref: '#/components/schemas/User' }
+
+    # -------------------------------------------------------------- users
+    UserRole:
+      type: string
+      enum: [user, moderator, admin]
+    UserPublic:
+      type: object
+      required: [id, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        avatarUrl: { type: string, format: uri, nullable: true }
+    User:
+      allOf:
+        - $ref: '#/components/schemas/UserPublic'
+        - type: object
+          required: [locale, role]
+          properties:
+            email: { type: string, format: email, nullable: true }
+            locale: { $ref: '#/components/schemas/LanguageCode' }
+            role: { $ref: '#/components/schemas/UserRole' }
+    UserUpdate:
+      type: object
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 100 }
+        locale: { $ref: '#/components/schemas/LanguageCode' }
+
+    # ------------------------------------------------------------- grades
+    GradeSystemCode:
+      type: string
+      pattern: '^[A-Z][A-Z_]*$'
+      description: |
+        Код системы из `GET /grade-systems`. Сейчас: `RU`, `IFAS`, `UIAA`, `FR_FREE`, `YDS`, `AID`, `WI`.
+        Намеренно строка, а не enum: новые системы добавляются данными, и старые версии
+        приложения не должны падать на незнакомом коде.
+      example: RU
+    Grade:
+      type: object
+      description: Категория в конкретной системе. Показывается всегда с указанием системы.
+      required: [system, value]
+      properties:
+        system: { $ref: '#/components/schemas/GradeSystemCode' }
+        value: { type: string, example: 5Б }
+    GradeValue:
+      type: object
+      required: [value, sortOrder]
+      properties:
+        value: { type: string }
+        sortOrder:
+          type: integer
+          description: Порядок внутри системы. Между системами не сравнивается.
+    GradeSystem:
+      type: object
+      required: [code, kind, name, values]
+      properties:
+        code: { $ref: '#/components/schemas/GradeSystemCode' }
+        kind:
+          type: string
+          enum: [overall, free, aid, ice]
+          description: 'overall — общая категория маршрута, free — свободное лазание, aid — ИТО, ice — лёд'
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        values:
+          type: array
+          description: Все значения системы по возрастанию сложности (ограниченный справочник)
+          items: { $ref: '#/components/schemas/GradeValue' }
+    GradeSystemPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/GradeSystem' }
+        nextCursor: { type: string, nullable: true }
+
+    # -------------------------------------------------------------- areas
+    AreaType:
+      type: string
+      enum: [mountain_system, region, ridge, massif, summit, other]
+    ContentStatus:
+      type: string
+      enum: [draft, published, hidden]
+    AreaRef:
+      type: object
+      required: [id, slug, type, name]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { $ref: '#/components/schemas/Slug' }
+        type: { $ref: '#/components/schemas/AreaType' }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+    AreaSummary:
+      allOf:
+        - $ref: '#/components/schemas/AreaRef'
+        - type: object
+          required: [status, updatedAt]
+          properties:
+            parentId: { type: string, format: uuid, nullable: true }
+            center: { $ref: '#/components/schemas/GeoJsonPoint' }
+            elevationM:
+              type: integer
+              nullable: true
+              description: Только для вершин. null — нет данных.
+            status: { $ref: '#/components/schemas/ContentStatus' }
+            childCount: { type: integer }
+            routeCount: { type: integer, description: Опубликованные маршруты, включая вложенные районы }
+            updatedAt: { type: string, format: date-time }
+    Area:
+      allOf:
+        - $ref: '#/components/schemas/AreaSummary'
+        - type: object
+          required: [ancestors]
+          properties:
+            description: { $ref: '#/components/schemas/LocalizedText' }
+            boundary: { $ref: '#/components/schemas/GeoJsonMultiPolygon' }
+            ancestors:
+              type: array
+              description: Хлебные крошки от корня к родителю
+              items: { $ref: '#/components/schemas/AreaRef' }
+    AreaCreate:
+      type: object
+      required: [type, slug, name]
+      properties:
+        parentId: { type: string, format: uuid, nullable: true }
+        type: { $ref: '#/components/schemas/AreaType' }
+        slug: { $ref: '#/components/schemas/Slug' }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        description: { $ref: '#/components/schemas/LocalizedText' }
+        center: { $ref: '#/components/schemas/GeoJsonPoint' }
+        elevationM: { type: integer, nullable: true, minimum: -500, maximum: 9000 }
+        boundary: { $ref: '#/components/schemas/GeoJsonMultiPolygon' }
+        status: { $ref: '#/components/schemas/ContentStatus' }
+    AreaUpdate:
+      type: object
+      description: Только изменяемые поля
+      properties:
+        parentId: { type: string, format: uuid, nullable: true }
+        type: { $ref: '#/components/schemas/AreaType' }
+        slug: { $ref: '#/components/schemas/Slug' }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        description: { $ref: '#/components/schemas/LocalizedText' }
+        center: { $ref: '#/components/schemas/GeoJsonPoint' }
+        elevationM: { type: integer, nullable: true, minimum: -500, maximum: 9000 }
+        boundary: { $ref: '#/components/schemas/GeoJsonMultiPolygon' }
+        status: { $ref: '#/components/schemas/ContentStatus' }
+    AreaPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AreaSummary' }
+        nextCursor: { type: string, nullable: true }
+
+    # ------------------------------------------------------------- routes
+    RouteType:
+      type: string
+      enum: [rock, snow_ice, combined]
+      description: Скальный, снежно-ледовый, комбинированный
+    RouteContent:
+      type: object
+      description: |
+        Полный снимок описания маршрута — то, что хранит одна ревизия.
+        Любое фактическое поле может быть null — это «нет данных», а не ноль.
+      required: [areaId, name, grades]
+      properties:
+        areaId: { type: string, format: uuid }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        description: { $ref: '#/components/schemas/LocalizedText' }
+        grades:
+          type: array
+          description: Не больше одной категории на систему. Пустой массив — категория неизвестна.
+          maxItems: 10
+          items: { $ref: '#/components/schemas/Grade' }
+        routeType: { $ref: '#/components/schemas/RouteType' }
+        isTraverse: { type: boolean, nullable: true }
+        elevationGainM: { type: integer, nullable: true, minimum: 1, maximum: 8999, description: Перепад высот }
+        lengthM: { type: integer, nullable: true, minimum: 1, description: Протяжённость }
+        seasonMonths:
+          type: array
+          nullable: true
+          description: Месяцы сезона, 1–12
+          items: { type: integer, minimum: 1, maximum: 12 }
+        firstAscentParty: { type: string, nullable: true, maxLength: 1000, description: Первопроходцы }
+        firstAscentYear: { type: integer, nullable: true, minimum: 1700, maximum: 2100 }
+        dataSources:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: Откуда взяты данные — классификатор, отчёт, путеводитель
+        features:
+          type: array
+          description: |
+            Геометрия маршрута — любой набор точек и линий, в том числе пустой
+            (маршрут без геометрии не показывается на карте, но есть в каталоге района).
+            Порядок элементов сохраняется: это порядок отрисовки.
+          maxItems: 50
+          items: { $ref: '#/components/schemas/RouteFeature' }
+    RouteFeatureKind:
+      type: string
+      enum: [start, summit, bivouac, descent_start, route_line, approach, descent]
+      description: |
+        Точки: start — начало маршрута, summit — вершина, bivouac — ночёвка/бивак,
+        descent_start — начало спуска. Линии: route_line — нитка, approach — подход, descent — спуск.
+    RouteFeature:
+      type: object
+      description: |
+        Одна точка или одна линия. Для точечных видов заполняется `point`, для линейных — `line`;
+        иначе `400`.
+
+        **Импорт из GPX.** Линию можно взять из трека этого же маршрута: передать `sourceTrackId`
+        и не передавать `line`. Сервер скопирует геометрию трека (в 2D, сегменты склеиваются).
+        Если сегменты трека не склеиваются в одну линию — `400` с `type = track-not-contiguous`;
+        тогда веб-клиент даёт обрезать трек в редакторе и присылает `line` вместе с `sourceTrackId`
+        (ссылка сохраняется как источник). Трек в статусе `processing` — `409`.
+      required: [kind]
+      properties:
+        kind: { $ref: '#/components/schemas/RouteFeatureKind' }
+        point: { $ref: '#/components/schemas/GeoJsonPoint' }
+        line: { $ref: '#/components/schemas/GeoJsonLineString' }
+        elevationM:
+          type: integer
+          nullable: true
+          minimum: -500
+          maximum: 9000
+          description: Только для точек — высота из описания («ночёвка 4200 м»). null — нет данных.
+        note: { $ref: '#/components/schemas/LocalizedText' }
+        sourceTrackId: { type: string, format: uuid, nullable: true }
+    RouteSummary:
+      type: object
+      required: [id, slug, status, name, area, grades, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { $ref: '#/components/schemas/Slug' }
+        status: { $ref: '#/components/schemas/ContentStatus' }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        area: { $ref: '#/components/schemas/AreaRef' }
+        grades:
+          type: array
+          items: { $ref: '#/components/schemas/Grade' }
+        routeType: { $ref: '#/components/schemas/RouteType' }
+        elevationGainM: { type: integer, nullable: true }
+        lengthM: { type: integer, nullable: true }
+        anchorPoint: { $ref: '#/components/schemas/AnchorPoint' }
+        distanceM:
+          type: number
+          nullable: true
+          description: Только при поиске с `near` — расстояние по geography
+        coverPhotoUrl: { type: string, format: uri, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    AnchorPoint:
+      allOf:
+        - $ref: '#/components/schemas/GeoJsonPoint'
+      description: |
+        Точка маркера на карте, вычисляется сервером: начало → вершина → первая точка нитки →
+        первая точка любого другого объекта. Отсутствует, если у маршрута нет геометрии.
+    RouteDetail:
+      allOf:
+        - $ref: '#/components/schemas/RouteContent'
+        - type: object
+          required: [id, slug, status, area, areaPath, currentRevision, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            slug: { $ref: '#/components/schemas/Slug' }
+            status: { $ref: '#/components/schemas/ContentStatus' }
+            area: { $ref: '#/components/schemas/AreaRef' }
+            areaPath:
+              type: array
+              description: Хлебные крошки от корня к району маршрута
+              items: { $ref: '#/components/schemas/AreaRef' }
+            currentRevision: { $ref: '#/components/schemas/RouteRevisionRef' }
+            stats: { $ref: '#/components/schemas/RouteStats' }
+            updatedAt: { type: string, format: date-time }
+    RouteStats:
+      type: object
+      properties:
+        photoCount: { type: integer }
+        trackCount: { type: integer }
+        ascentCount: { type: integer }
+        commentCount: { type: integer }
+        documentCount: { type: integer }
+    RouteSummaryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RouteSummary' }
+        nextCursor: { type: string, nullable: true }
+    RouteMapPoint:
+      type: object
+      required: [id, slug, name, anchorPoint, grades]
+      properties:
+        id: { type: string, format: uuid }
+        slug: { $ref: '#/components/schemas/Slug' }
+        name: { $ref: '#/components/schemas/LocalizedText' }
+        anchorPoint: { $ref: '#/components/schemas/AnchorPoint' }
+        grades:
+          type: array
+          items: { $ref: '#/components/schemas/Grade' }
+    RouteMapPointPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RouteMapPoint' }
+        nextCursor: { type: string, nullable: true }
+    RouteCreate:
+      type: object
+      required: [content]
+      properties:
+        slug:
+          allOf:
+            - $ref: '#/components/schemas/Slug'
+          description: Необязательно — сервер сгенерирует транслитерацией названия
+        content: { $ref: '#/components/schemas/RouteContent' }
+        changeSummary: { type: string, maxLength: 500 }
+        publish:
+          type: boolean
+          default: false
+          description: |
+            Только модератор: сразу одобрить и опубликовать (в журнал модерации пишется
+            как самоодобрение). Для остальных `true` — `403`.
+    RouteRevisionCreate:
+      type: object
+      required: [baseRevisionId, content]
+      properties:
+        baseRevisionId:
+          type: string
+          format: uuid
+          description: Ревизия, от которой начато редактирование
+        content: { $ref: '#/components/schemas/RouteContent' }
+        changeSummary: { type: string, maxLength: 500 }
+        publish:
+          type: boolean
+          default: false
+          description: |
+            Только модератор: сразу одобрить и опубликовать (в журнал модерации пишется
+            как самоодобрение). Для остальных `true` — `403`.
+    RouteRevisionRef:
+      type: object
+      required: [id, revisionNumber]
+      properties:
+        id: { type: string, format: uuid }
+        revisionNumber: { type: integer }
+        approvedAt: { type: string, format: date-time, nullable: true }
+    RouteRevisionSummary:
+      type: object
+      required: [id, routeId, revisionNumber, author, createdAt, status, isCurrent]
+      properties:
+        id: { type: string, format: uuid }
+        routeId: { type: string, format: uuid }
+        revisionNumber: { type: integer }
+        baseRevisionId: { type: string, format: uuid, nullable: true }
+        revertedFromId: { type: string, format: uuid, nullable: true }
+        author: { $ref: '#/components/schemas/UserPublic' }
+        changeSummary: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/ReviewStatus' }
+        isCurrent: { type: boolean }
+        reviewedBy: { $ref: '#/components/schemas/UserPublic' }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+        reviewNote: { type: string, nullable: true }
+    RouteRevision:
+      allOf:
+        - $ref: '#/components/schemas/RouteRevisionSummary'
+        - type: object
+          required: [content]
+          properties:
+            content: { $ref: '#/components/schemas/RouteContent' }
+    RouteRevisionSummaryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RouteRevisionSummary' }
+        nextCursor: { type: string, nullable: true }
+    ReviewDecision:
+      type: object
+      properties:
+        note: { type: string, maxLength: 2000 }
+    ReviewDecisionWithNote:
+      type: object
+      required: [note]
+      properties:
+        note: { type: string, minLength: 1, maxLength: 2000 }
+
+    # ------------------------------------------------------------ uploads
+    UploadRequest:
+      type: object
+      required: [purpose, contentType, sizeBytes]
+      properties:
+        purpose: { type: string, enum: [photo, track, document, avatar] }
+        contentType:
+          type: string
+          description: 'photo: image/jpeg, image/png, image/webp, image/heic; track: application/gpx+xml, application/vnd.google-earth.kml+xml; document: application/pdf'
+        sizeBytes: { type: integer, format: int64, minimum: 1 }
+        fileName: { type: string, maxLength: 255 }
+    UploadSlot:
+      type: object
+      required: [uploadId, url, method, headers, expiresAt]
+      properties:
+        uploadId: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        method: { type: string, enum: [PUT] }
+        headers:
+          type: object
+          description: Заголовки, которые нужно передать в PUT без изменений
+          additionalProperties: { type: string }
+        expiresAt: { type: string, format: date-time }
+
+    # ------------------------------------------------------------- photos
+    PhotoKind:
+      type: string
+      enum: [overview, topo, detail]
+      description: 'overview — общий вид, topo — фото для прорисовки нитки, detail — деталь участка'
+    PhotoUrls:
+      type: object
+      description: Производные без EXIF. Появляются, когда `processingStatus = ready`.
+      required: [thumbnail, medium, full]
+      properties:
+        thumbnail: { type: string, format: uri }
+        medium: { type: string, format: uri }
+        full: { type: string, format: uri }
+    Photo:
+      type: object
+      required: [id, author, kind, processingStatus, topoLines, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        routeId: { type: string, format: uuid, nullable: true }
+        areaId: { type: string, format: uuid, nullable: true }
+        ascentId: { type: string, format: uuid, nullable: true }
+        author: { $ref: '#/components/schemas/UserPublic' }
+        kind: { $ref: '#/components/schemas/PhotoKind' }
+        widthPx: { type: integer, nullable: true, description: С учётом EXIF-ориентации }
+        heightPx: { type: integer, nullable: true, description: С учётом EXIF-ориентации }
+        takenAt: { type: string, format: date-time, nullable: true }
+        location: { $ref: '#/components/schemas/GeoJsonPoint' }
+        caption: { type: string, nullable: true }
+        captionLanguage: { $ref: '#/components/schemas/LanguageCode' }
+        processingStatus: { $ref: '#/components/schemas/ProcessingStatus' }
+        urls: { $ref: '#/components/schemas/PhotoUrls' }
+        topoLines:
+          type: array
+          description: Текущие прорисовки всех маршрутов на этом фото (обычно 0–5)
+          items: { $ref: '#/components/schemas/TopoLine' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PhotoCreate:
+      type: object
+      required: [id, uploadId, kind]
+      properties:
+        id: { type: string, format: uuid, description: Генерируется клиентом }
+        uploadId: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/PhotoKind' }
+        ascentId:
+          type: string
+          format: uuid
+          description: Только для фото маршрута; восхождение должно быть по этому же маршруту
+        caption: { type: string, maxLength: 1000 }
+        captionLanguage: { $ref: '#/components/schemas/LanguageCode' }
+    PhotoUpdate:
+      type: object
+      properties:
+        kind: { $ref: '#/components/schemas/PhotoKind' }
+        caption: { type: string, nullable: true, maxLength: 1000 }
+        captionLanguage: { $ref: '#/components/schemas/LanguageCode' }
+    PhotoPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Photo' }
+        nextCursor: { type: string, nullable: true }
+
+    # --------------------------------------------------------------- topo
+    TopoPoint:
+      type: object
+      description: |
+        Координаты в долях размера изображения ПОСЛЕ применения EXIF-ориентации:
+        (0,0) — левый верхний угол, (1,1) — правый нижний. Не пиксели исходника —
+        так рисунок совпадает с фото любого разрешения.
+      required: [x, y]
+      properties:
+        x: { type: number, format: double, minimum: 0, maximum: 1 }
+        y: { type: number, format: double, minimum: 0, maximum: 1 }
+    TopoPath:
+      type: object
+      required: [id, style, points]
+      properties:
+        id: { type: string, maxLength: 36, description: Уникален внутри рисунка }
+        style:
+          type: string
+          enum: [main, variant, approach, descent]
+          description: Основная нитка, вариант, подход, спуск
+        points:
+          type: array
+          minItems: 2
+          maxItems: 2000
+          items: { $ref: '#/components/schemas/TopoPoint' }
+    TopoMarker:
+      type: object
+      required: [x, y, kind]
+      properties:
+        x: { type: number, format: double, minimum: 0, maximum: 1 }
+        y: { type: number, format: double, minimum: 0, maximum: 1 }
+        kind:
+          type: string
+          enum: [belay, crux, bivouac, rappel, key_point]
+          description: Станция, ключевой участок, ночёвка, дюльфер, ориентир
+        label: { type: string, maxLength: 50, example: R3 }
+    TopoLabel:
+      type: object
+      description: Подпись участка
+      required: [x, y, text]
+      properties:
+        x: { type: number, format: double, minimum: 0, maximum: 1 }
+        y: { type: number, format: double, minimum: 0, maximum: 1 }
+        text: { type: string, minLength: 1, maxLength: 200, example: 'R3–R4: внутренний угол, V+' }
+        pathId: { type: string, description: К какой линии относится }
+    TopoDrawing:
+      type: object
+      required: [formatVersion, paths]
+      properties:
+        formatVersion:
+          type: integer
+          enum: [1]
+          description: Версия формата. Клиент, не знающий версию, показывает фото без рисунка.
+        paths:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { $ref: '#/components/schemas/TopoPath' }
+        markers:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/TopoMarker' }
+        labels:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/TopoLabel' }
+    TopoLine:
+      type: object
+      required: [id, photoId, routeId, version, status, isCurrent, drawing, author, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        photoId: { type: string, format: uuid }
+        routeId: { type: string, format: uuid }
+        version: { type: integer }
+        baseVersionId: { type: string, format: uuid, nullable: true }
+        status: { $ref: '#/components/schemas/ReviewStatus' }
+        isCurrent: { type: boolean }
+        drawing: { $ref: '#/components/schemas/TopoDrawing' }
+        author: { $ref: '#/components/schemas/UserPublic' }
+        createdAt: { type: string, format: date-time }
+        reviewedAt: { type: string, format: date-time, nullable: true }
+        reviewNote: { type: string, nullable: true }
+    TopoLineCreate:
+      type: object
+      required: [drawing]
+      properties:
+        baseVersionId:
+          type: string
+          format: uuid
+          nullable: true
+          description: null — первая прорисовка этого маршрута на этом фото
+        drawing: { $ref: '#/components/schemas/TopoDrawing' }
+    TopoLinePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TopoLine' }
+        nextCursor: { type: string, nullable: true }
+
+    # ------------------------------------------------------------- tracks
+    Track:
+      type: object
+      required: [id, routeId, author, format, processingStatus, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        routeId: { type: string, format: uuid }
+        ascentId: { type: string, format: uuid, nullable: true }
+        author: { $ref: '#/components/schemas/UserPublic' }
+        format: { type: string, enum: [gpx, kml] }
+        originalFilename: { type: string, nullable: true }
+        recordedOn: { type: string, format: date, nullable: true }
+        note: { type: string, nullable: true }
+        lengthM: { type: integer, nullable: true }
+        elevationGainM: { type: integer, nullable: true, description: По сглаженному профилю }
+        elevationLossM: { type: integer, nullable: true }
+        minElevationM: { type: integer, nullable: true }
+        maxElevationM: { type: integer, nullable: true }
+        elevationSource:
+          type: string
+          nullable: true
+          enum: [gps, barometric, dem, mixed]
+        processingStatus: { $ref: '#/components/schemas/ProcessingStatus' }
+        processingError: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TrackCreate:
+      type: object
+      required: [id, uploadId]
+      properties:
+        id: { type: string, format: uuid, description: Генерируется клиентом }
+        uploadId: { type: string, format: uuid }
+        ascentId: { type: string, format: uuid }
+        recordedOn: { type: string, format: date }
+        note: { type: string, maxLength: 2000 }
+    TrackUpdate:
+      type: object
+      properties:
+        recordedOn: { type: string, format: date, nullable: true }
+        note: { type: string, nullable: true, maxLength: 2000 }
+    TrackPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Track' }
+        nextCursor: { type: string, nullable: true }
+    ElevationProfile:
+      type: object
+      required: [source, points]
+      properties:
+        source:
+          type: string
+          enum: [gps, barometric, dem, mixed]
+        points:
+          type: array
+          description: '`[distanceM, elevationM]` по возрастанию дистанции, после сглаживания и прореживания'
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items: { type: number }
+
+    # ---------------------------------------------------------- documents
+    RightsStatus:
+      type: string
+      enum: [unknown, public_domain, licensed, permission_granted, own_work, restricted]
+      description: |
+        unknown — не выяснен (по умолчанию, публикация запрещена);
+        public_domain — общественное достояние; licensed — открытая лицензия (указать в rightsNote);
+        permission_granted — есть разрешение правообладателя (указать в rightsNote);
+        own_work — загрузивший является автором; restricted — публиковать нельзя.
+    Document:
+      type: object
+      required: [id, title, sourceType, sourceDescription, rightsStatus, visibility, processingStatus, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        routeId: { type: string, format: uuid, nullable: true }
+        areaId: { type: string, format: uuid, nullable: true }
+        title: { $ref: '#/components/schemas/LocalizedText' }
+        sourceType:
+          type: string
+          enum: [classifier, ascent_report, guidebook, periodical, other]
+        sourceDescription: { type: string }
+        year: { type: integer, nullable: true }
+        pageCount: { type: integer, nullable: true }
+        rightsStatus: { $ref: '#/components/schemas/RightsStatus' }
+        rightsNote: { type: string, nullable: true }
+        visibility: { $ref: '#/components/schemas/Visibility' }
+        processingStatus: { $ref: '#/components/schemas/ProcessingStatus' }
+        uploadedBy: { $ref: '#/components/schemas/UserPublic' }
+        createdAt: { type: string, format: date-time }
+    DocumentCreate:
+      type: object
+      required: [uploadId, title, sourceType, sourceDescription]
+      properties:
+        uploadId: { type: string, format: uuid }
+        title: { $ref: '#/components/schemas/LocalizedText' }
+        sourceType:
+          type: string
+          enum: [classifier, ascent_report, guidebook, periodical, other]
+        sourceDescription:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Откуда документ — точно и проверяемо
+        year: { type: integer, minimum: 1800, maximum: 2100 }
+        claimedRightsStatus:
+          allOf:
+            - $ref: '#/components/schemas/RightsStatus'
+          description: Что утверждает загрузивший. Окончательный статус ставит модератор.
+        rightsNote: { type: string, maxLength: 2000 }
+    DocumentRightsUpdate:
+      type: object
+      required: [rightsStatus, visibility]
+      properties:
+        rightsStatus: { $ref: '#/components/schemas/RightsStatus' }
+        rightsNote: { type: string, nullable: true, maxLength: 2000 }
+        visibility: { $ref: '#/components/schemas/Visibility' }
+    DocumentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Document' }
+        nextCursor: { type: string, nullable: true }
+
+    # ------------------------------------------------------------ ascents
+    AscentMember:
+      type: object
+      description: Участник группы помимо автора. Зарегистрированный (userId) или просто по имени.
+      properties:
+        userId: { type: string, format: uuid, nullable: true }
+        user: { $ref: '#/components/schemas/UserPublic' }
+        name: { type: string, nullable: true, maxLength: 200 }
+        isLeader: { type: boolean, default: false }
+    AscentFields:
+      type: object
+      required: [ascentDate, datePrecision]
+      properties:
+        ascentDate:
+          type: string
+          format: date
+          description: При точности month/year — первое число периода (1985-07-01, 1985-01-01)
+        datePrecision: { type: string, enum: [day, month, year] }
+        outcome:
+          type: string
+          nullable: true
+          enum: [summit, retreat]
+        totalTimeMinutes: { type: integer, nullable: true, minimum: 1, description: Ходовое время }
+        conditions: { type: string, nullable: true, maxLength: 5000 }
+        report: { type: string, nullable: true, maxLength: 20000 }
+        language: { $ref: '#/components/schemas/LanguageCode' }
+        isPrivate: { type: boolean, default: false }
+        members:
+          type: array
+          maxItems: 30
+          items: { $ref: '#/components/schemas/AscentMember' }
+    AscentCreate:
+      allOf:
+        - type: object
+          required: [id]
+          properties:
+            id: { type: string, format: uuid, description: Генерируется клиентом }
+        - $ref: '#/components/schemas/AscentFields'
+    Ascent:
+      allOf:
+        - $ref: '#/components/schemas/AscentFields'
+        - type: object
+          required: [id, routeId, user, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            routeId: { type: string, format: uuid }
+            route: { $ref: '#/components/schemas/RouteSummary' }
+            user: { $ref: '#/components/schemas/UserPublic' }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    AscentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Ascent' }
+        nextCursor: { type: string, nullable: true }
+
+    # ----------------------------------------------------------- comments
+    Comment:
+      type: object
+      required: [id, author, createdAt, isDeleted]
+      properties:
+        id: { type: string, format: uuid }
+        author: { $ref: '#/components/schemas/UserPublic' }
+        routeId: { type: string, format: uuid, nullable: true }
+        ascentId: { type: string, format: uuid, nullable: true }
+        parentId: { type: string, format: uuid, nullable: true }
+        body: { type: string, nullable: true, description: null у удалённого комментария }
+        language: { $ref: '#/components/schemas/LanguageCode' }
+        isDeleted: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        editedAt: { type: string, format: date-time, nullable: true }
+    CommentCreate:
+      type: object
+      required: [id, body]
+      properties:
+        id: { type: string, format: uuid, description: Генерируется клиентом }
+        body: { type: string, minLength: 1, maxLength: 5000 }
+        parentId:
+          type: string
+          format: uuid
+          description: Ответ на комментарий верхнего уровня того же объекта (один уровень вложенности)
+        language: { $ref: '#/components/schemas/LanguageCode' }
+    CommentUpdate:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 5000 }
+    CommentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Comment' }
+        nextCursor: { type: string, nullable: true }
+
+    # --------------------------------------------------------- moderation
+    ModerationTargetType:
+      type: string
+      enum: [area, route, route_revision, photo, topo_line, track, document, ascent, comment, user]
+    FlagReason:
+      type: string
+      enum: [spam, offensive, incorrect_data, dangerous_info, copyright, duplicate, other]
+    FlagStatus:
+      type: string
+      enum: [open, resolved, dismissed]
+    FlagCreate:
+      type: object
+      required: [targetType, targetId, reason]
+      properties:
+        targetType: { $ref: '#/components/schemas/ModerationTargetType' }
+        targetId: { type: string, format: uuid }
+        reason: { $ref: '#/components/schemas/FlagReason' }
+        note: { type: string, maxLength: 2000, description: Обязательно при reason = other }
+    Flag:
+      type: object
+      required: [id, targetType, targetId, reason, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        targetType: { $ref: '#/components/schemas/ModerationTargetType' }
+        targetId: { type: string, format: uuid }
+        reporter: { $ref: '#/components/schemas/UserPublic' }
+        reason: { $ref: '#/components/schemas/FlagReason' }
+        note: { type: string, nullable: true }
+        status: { $ref: '#/components/schemas/FlagStatus' }
+        resolvedBy: { $ref: '#/components/schemas/UserPublic' }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        resolutionNote: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    FlagResolve:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [resolved, dismissed] }
+        note: { type: string, maxLength: 2000 }
+    FlagPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Flag' }
+        nextCursor: { type: string, nullable: true }
+    VisibilityChange:
+      type: object
+      required: [targetType, targetId, visibility, note]
+      properties:
+        targetType:
+          type: string
+          enum: [area, route, photo, track, document, ascent, comment]
+        targetId: { type: string, format: uuid }
+        visibility: { $ref: '#/components/schemas/Visibility' }
+        note: { type: string, minLength: 1, maxLength: 2000 }
+        flagId: { type: string, format: uuid, description: Жалоба, по которой принято решение }
+    ModerationLogEntry:
+      type: object
+      required: [id, actor, action, targetType, targetId, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        actor: { $ref: '#/components/schemas/UserPublic' }
+        action: { type: string, example: approve_revision }
+        targetType: { $ref: '#/components/schemas/ModerationTargetType' }
+        targetId: { type: string, format: uuid }
+        flagId: { type: string, format: uuid, nullable: true }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    ModerationLogPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ModerationLogEntry' }
+        nextCursor: { type: string, nullable: true }
