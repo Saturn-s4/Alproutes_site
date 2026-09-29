@@ -1,0 +1,162 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Adaptive.dc.html": {
+      "h": 900,
+      "title": "Адаптация 1600 → 4K",
+      "w": 1600,
+      "x": 3360,
+      "y": 2640
+    },
+    "LightMain.dc.html": {
+      "h": 900,
+      "title": "A · светлая тема",
+      "w": 1600,
+      "x": 0,
+      "y": 1320
+    },
+    "LightRouteA.dc.html": {
+      "h": 1400,
+      "title": "Страница маршрута · светлая",
+      "w": 1600,
+      "x": 1680,
+      "y": 2640
+    },
+    "LightVariantB.dc.html": {
+      "h": 900,
+      "title": "B · светлая тема",
+      "w": 1600,
+      "x": 1680,
+      "y": 1320
+    },
+    "LightVariantC.dc.html": {
+      "h": 900,
+      "title": "C · светлая тема",
+      "w": 1600,
+      "x": 3360,
+      "y": 1320
+    },
+    "Login.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Вход и регистрация",
+      "w": 1600,
+      "x": 0,
+      "y": 4460
+    },
+    "Main.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "A · Карта в центре",
+      "w": 1600,
+      "x": 0,
+      "y": 0
+    },
+    "Profile.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "Профиль и настройки",
+      "w": 1600,
+      "x": 3360,
+      "y": 4460
+    },
+    "RouteA.dc.html": {
+      "h": 1400,
+      "is_interactive": true,
+      "title": "Страница маршрута · тёмная",
+      "w": 1600,
+      "x": 0,
+      "y": 2640
+    },
+    "Upload.dc.html": {
+      "h": 1500,
+      "is_interactive": true,
+      "title": "Добавление маршрута",
+      "w": 1600,
+      "x": 1680,
+      "y": 4460
+    },
+    "VariantB.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "B · Каталог-журнал",
+      "w": 1600,
+      "x": 1680,
+      "y": 0
+    },
+    "VariantC.dc.html": {
+      "h": 900,
+      "is_interactive": true,
+      "title": "C · Технический / топо",
+      "w": 1600,
+      "x": 3360,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-29T12:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "s1": {
+      "color": "orange",
+      "text": "Тема и язык переключаются прямо в шапке (солнце/луна, RU/EN) — нажмите Play на экране. В профиле — постоянная настройка: Тёмная / Светлая / Как в системе.",
+      "w": 360,
+      "x": 5040,
+      "y": 0
+    },
+    "t1": {
+      "kind": "title1",
+      "maxW": 4960,
+      "text": "Три направления · тёмная тема (1600×900)",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t2": {
+      "kind": "title1",
+      "maxW": 4960,
+      "text": "Страница маршрута и правила адаптации",
+      "w": 240,
+      "x": 0,
+      "y": 2340
+    },
+    "t3": {
+      "kind": "title1",
+      "maxW": 4960,
+      "text": "Те же экраны · светлая тема",
+      "w": 240,
+      "x": 0,
+      "y": 1020
+    },
+    "t4": {
+      "kind": "title1",
+      "maxW": 4960,
+      "text": "Остальные экраны · вход, загрузка, профиль",
+      "w": 240,
+      "x": 0,
+      "y": 4160
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "VariantB.dc.html",
+    "VariantC.dc.html",
+    "LightMain.dc.html",
+    "LightVariantB.dc.html",
+    "LightVariantC.dc.html",
+    "RouteA.dc.html",
+    "LightRouteA.dc.html",
+    "Adaptive.dc.html",
+    "Login.dc.html",
+    "Upload.dc.html",
+    "Profile.dc.html"
+  ],
+  "pages": [],
+  "title": "Alproutes — веб-интерфейс"
+}

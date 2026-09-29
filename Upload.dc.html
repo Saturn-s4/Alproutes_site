@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Добавление маршрута</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',sans-serif}
+.th-dark{--bg:#0A0B0D;--surface:#0E1013;--surface2:#14171C;--raised:#1C1F25;--line:#1F2229;--line2:#2B2F37;--text:#EDEEF0;--text2:#C5C9D0;--muted:#9AA0AA;--faint:#7D838E;--accent:#F08C50;--accent-text:#F6B38A;--accent-soft:rgba(240,140,80,0.14);--on-accent:#0A0B0D;--blue:#2F6BFF;--blue-text:#6FA3FF;--blue-hover:#9CC0FF;--blue-soft:rgba(47,107,255,0.16);--map:#0C0F14;--photo:#151A22;--photo2:#1C2330;--photo3:#2A3444;--overlay:rgba(14,16,19,0.92);color-scheme:dark}
+.th-light{--bg:#F5F4F1;--surface:#FFFFFF;--surface2:#F3F2EF;--raised:#E8E6E1;--line:#E4E2DC;--line2:#D3D0C8;--text:#15161A;--text2:#3B3F46;--muted:#5F636B;--faint:#6E727A;--accent:#EE8B52;--accent-text:#B0561F;--accent-soft:rgba(238,139,82,0.16);--on-accent:#15161A;--blue:#2D62E6;--blue-text:#2255D0;--blue-hover:#173FA3;--blue-soft:rgba(45,98,230,0.12);--map:#EDF1F6;--photo:#DDE3EB;--photo2:#C9D2DE;--photo3:#B5C0CF;--overlay:rgba(255,255,255,0.94);color-scheme:light}
+.th-dark,.th-light{background:var(--bg);color:var(--text)}
+.th-dark a,.th-light a{color:var(--blue-text);text-decoration:none}.th-dark a:hover,.th-light a:hover{color:var(--blue-hover)}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+button,input,textarea,select{font-family:inherit}
+</style>
+</helmet>
+<div class="{{themeClass}}" style="width: 1600px; height: 1500px; display: flex; flex-direction: column; background: var(--bg); overflow: hidden">
+
+<header style="height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 28px; padding: 0 20px; border-bottom: 1px solid var(--line)">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="26" height="26" viewBox="0 0 26 26" fill="none"><path d="M2 22 L10 8 L14 14 L17 10 L24 22 Z" stroke-width="2" stroke-linejoin="round" style="stroke: var(--accent)"></path></svg>
+<span style="font-family: Unbounded, sans-serif; font-weight: 700; font-size: 16px">ALPROUTES</span>
+</div>
+<nav style="display: flex; gap: 4px; font-size: 14px">
+<a href="Main.dc.html" style="padding: 8px 14px; border-radius: 6px; color: var(--muted)">Карта</a>
+<a href="#" style="padding: 8px 14px; border-radius: 6px; color: var(--muted)">Каталог</a>
+<a href="Profile.dc.html" style="padding: 8px 14px; border-radius: 6px; color: var(--muted)">Мои треки</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<div role="group" aria-label="Язык интерфейса" style="display: flex; gap: 2px; padding: 3px; border: 1px solid var(--line2); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+<button aria-pressed="{{ruOn}}" onClick="{{setRu}}" style="height: 28px; min-width: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: {{ruBg}}; color: {{ruFg}}; cursor: pointer">RU</button>
+<button aria-pressed="{{enOn}}" onClick="{{setEn}}" style="height: 28px; min-width: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: {{enBg}}; color: {{enFg}}; cursor: pointer">EN</button>
+</div>
+<button aria-label="Переключить тему" onClick="{{toggleTheme}}" style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--line2); background: transparent; color: var(--text2); display: flex; align-items: center; justify-content: center; cursor: pointer">
+<sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></sc-if>
+<sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></sc-if>
+</button>
+<button aria-label="Профиль" style="width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 13px">СО</button>
+</header>
+
+<div style="flex-grow: 1; display: flex; gap: 32px; padding: 28px 40px 40px; min-height: 0">
+
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0">
+<div style="display: flex; align-items: baseline; gap: 16px">
+<h1 style="margin: 0; font-family: Unbounded, sans-serif; font-weight: 700; font-size: 30px">Новый маршрут</h1>
+<span style="font-size: 14px; color: var(--muted)">Черновик сохранён автоматически · 2 мин назад</span>
+</div>
+
+<section style="padding: 22px 24px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 18px">
+<h2 style="margin: 0; font-family: Unbounded, sans-serif; font-weight: 500; font-size: 17px"><span style="color: var(--accent-text); font-family: 'JetBrains Mono', monospace">01</span> Основное</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted)">Вершина<input value="Эльбрус Западный" style="height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--surface2); color: var(--text); font-size: 15px"></label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted)">Название маршрута<input value="Классика с юга" style="height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--surface2); color: var(--text); font-size: 15px"></label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted)">Район<select style="height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--surface2); color: var(--text); font-size: 15px"><option>Кавказ · Приэльбрусье</option></select></label>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: var(--muted)">Категория сложности</span>
+<div style="display: flex; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 14px">
+<sc-for list="{{cats}}" as="c" hint-placeholder-count="12">
+<button type="button" style="width: 52px; height: 40px; border-radius: 8px; border: 1px solid {{c.bd}}; background: {{c.bg}}; color: {{c.fg}}">{{c.n}}</button>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; gap: 40px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: var(--muted)">Сезон</span>
+<div style="display: flex; gap: 6px; font-size: 14px">
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line2); background: transparent; color: var(--text2)">Весна</button>
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-text)">Лето</button>
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line2); background: transparent; color: var(--text2)">Осень</button>
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line2); background: transparent; color: var(--text2)">Зима</button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: var(--muted)">Характер</span>
+<div style="display: flex; gap: 6px; font-size: 14px">
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line2); background: transparent; color: var(--text2)">Скальный</button>
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line2); background: transparent; color: var(--text2)">Ледово-снежный</button>
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-text)">Комбинированный</button>
+</div>
+</div>
+</div>
+</section>
+
+<section style="padding: 22px 24px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font-family: Unbounded, sans-serif; font-weight: 500; font-size: 17px"><span style="color: var(--accent-text); font-family: 'JetBrains Mono', monospace">02</span> GPS-трек</h2>
+<div style="display: flex; gap: 20px">
+<div style="width: 420px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px">
+<div style="height: 110px; border-radius: 10px; border: 1.5px dashed var(--line2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); font-size: 14px">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"></path></svg>
+<span>Перетащите .gpx / .kml или <a href="#">выберите файл</a></span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; background: var(--surface2); font-size: 14px">
+<span style="width: 28px; height: 28px; border-radius: 50%; background: var(--blue-soft); color: var(--blue-text); display: flex; align-items: center; justify-content: center">✓</span>
+<span style="flex-grow: 1; display: flex; flex-direction: column"><span style="font-family: 'JetBrains Mono', monospace">[трек].gpx</span><span style="font-size: 12px; color: var(--muted)">2,3 МБ · 1 842 точки · загружен</span></span>
+<button type="button" style="height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 13px">Заменить</button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden">
+<div style="background: var(--surface); padding: 10px 12px"><div style="font-size: 11px; color: var(--muted)">Длина</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 16px">9,4 км</div></div>
+<div style="background: var(--surface); padding: 10px 12px"><div style="font-size: 11px; color: var(--muted)">Набор</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 16px">+1795 м</div></div>
+<div style="background: var(--surface); padding: 10px 12px"><div style="font-size: 11px; color: var(--muted)">Старт</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 16px">3847 м</div></div>
+<div style="background: var(--surface); padding: 10px 12px"><div style="font-size: 11px; color: var(--muted)">Максимум</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 16px">5642 м</div></div>
+</div>
+<span style="font-size: 12px; color: var(--muted)">Показатели рассчитаны из трека — можно поправить вручную</span>
+</div>
+<div style="flex-grow: 1; height: 320px; border-radius: 10px; position: relative; overflow: hidden; background: var(--map); border: 1px solid var(--line)">
+<svg viewBox="0 0 560 320" preserveAspectRatio="xMidYMid slice" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%">
+<g fill="none" stroke-opacity="0.4" style="stroke: var(--blue)">
+<ellipse cx="360" cy="110" rx="28" ry="16"></ellipse><ellipse cx="354" cy="118" rx="64" ry="40"></ellipse><ellipse cx="346" cy="128" rx="108" ry="68"></ellipse><ellipse cx="336" cy="140" rx="158" ry="100"></ellipse><ellipse cx="324" cy="154" rx="214" ry="138"></ellipse><ellipse cx="310" cy="170" rx="276" ry="180"></ellipse>
+</g>
+<path d="M150 300 C190 250 220 220 250 190 S320 140 360 110" fill="none" stroke-width="3" stroke-linecap="round" style="stroke: var(--accent)"></path>
+<circle cx="150" cy="300" r="6" stroke-width="3" style="fill: var(--bg); stroke: var(--accent)"></circle>
+<circle cx="360" cy="110" r="8" style="fill: var(--accent)"></circle>
+</svg>
+<div style="position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 6px; background: var(--overlay); font-size: 12px; color: var(--text2)">Предпросмотр · вершина определена автоматически</div>
+</div>
+</div>
+</section>
+
+<section style="padding: 22px 24px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: baseline; gap: 12px"><h2 style="margin: 0; font-family: Unbounded, sans-serif; font-weight: 500; font-size: 17px"><span style="color: var(--accent-text); font-family: 'JetBrains Mono', monospace">03</span> Фото</h2><span style="font-size: 13px; color: var(--muted)">5 из 40 · первое станет обложкой</span></div>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px">
+<div style="height: 120px; border-radius: 8px; background: var(--photo); position: relative; box-shadow: 0 0 0 2px var(--accent)"><span style="position: absolute; left: 8px; top: 8px; padding: 2px 6px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 600">обложка</span></div>
+<div style="height: 120px; border-radius: 8px; background: var(--photo2)"></div>
+<div style="height: 120px; border-radius: 8px; background: var(--photo)"></div>
+<div style="height: 120px; border-radius: 8px; background: var(--photo2)"></div>
+<div style="height: 120px; border-radius: 8px; background: var(--photo)"></div>
+<button type="button" style="height: 120px; border-radius: 8px; border: 1.5px dashed var(--line2); background: transparent; color: var(--muted); font-size: 14px">+ Добавить</button>
+</div>
+</section>
+
+<section style="padding: 22px 24px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; gap: 24px">
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: Unbounded, sans-serif; font-weight: 500; font-size: 17px"><span style="color: var(--accent-text); font-family: 'JetBrains Mono', monospace">04</span> Описание</h2>
+<div style="display: flex; gap: 2px; padding: 4px; border-radius: 8px 8px 0 0; border: 1px solid var(--line2); border-bottom: 0; background: var(--surface2); font-size: 14px">
+<button type="button" aria-label="Жирный" style="width: 34px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--text2); font-weight: 700">Ж</button>
+<button type="button" aria-label="Курсив" style="width: 34px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--text2); font-style: italic">К</button>
+<button type="button" style="height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text2)">Заголовок</button>
+<button type="button" style="height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text2)">Список</button>
+<button type="button" style="height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text2)">Участок на треке</button>
+</div>
+<textarea placeholder="Подход, ключевые участки, ночёвки, спуск, опасности…" style="height: 150px; margin-top: -12px; padding: 12px 14px; border-radius: 0 0 8px 8px; border: 1px solid var(--line2); background: var(--surface2); color: var(--text); font-size: 15px; line-height: 1.55; resize: vertical"></textarea>
+</div>
+<div style="width: 400px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: Unbounded, sans-serif; font-weight: 500; font-size: 17px"><span style="color: var(--accent-text); font-family: 'JetBrains Mono', monospace">05</span> Архив PDF</h2>
+<div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--surface2); font-size: 14px">
+<span style="width: 30px; height: 36px; border-radius: 4px; border: 1px solid var(--blue); color: var(--blue-text); font-family: 'JetBrains Mono', monospace; font-size: 9px; display: flex; align-items: center; justify-content: center">PDF</span>
+<span style="flex-grow: 1">[Описание, скан]</span>
+<input aria-label="Год" value="1987" style="width: 64px; height: 32px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line2); background: var(--surface); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px">
+</div>
+<button type="button" style="height: 44px; border-radius: 8px; border: 1.5px dashed var(--line2); background: transparent; color: var(--blue-text); font-size: 14px">+ Прикрепить PDF</button>
+</div>
+</section>
+</div>
+
+<aside style="width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 16px; padding-top: 52px">
+<div style="padding: 20px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px">
+<div style="font-family: Unbounded, sans-serif; font-weight: 500; font-size: 16px">Готовность</div>
+<div style="height: 6px; border-radius: 3px; background: var(--raised); overflow: hidden"><div style="width: 70%; height: 6px; background: var(--accent)"></div></div>
+<sc-for list="{{checks}}" as="c" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 10px; font-size: 14px">
+<span style="width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid {{c.bd}}; background: {{c.bg}}; color: var(--on-accent); font-size: 12px; display: flex; align-items: center; justify-content: center">{{c.mark}}</span>
+<span style="flex-grow: 1; color: var(--text)">{{c.t}}</span>
+<span style="font-size: 12px; color: var(--muted)">{{c.s}}</span>
+</div>
+</sc-for>
+</div>
+<div style="padding: 20px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 13px; color: var(--muted)">Видимость</div>
+<label style="display: flex; gap: 10px; align-items: center; font-size: 14px"><input type="radio" name="vis" checked style="accent-color: var(--accent); width: 18px; height: 18px">Публично в каталоге</label>
+<label style="display: flex; gap: 10px; align-items: center; font-size: 14px"><input type="radio" name="vis" style="accent-color: var(--accent); width: 18px; height: 18px">Только по ссылке</label>
+<label style="display: flex; gap: 10px; align-items: center; font-size: 14px"><input type="radio" name="vis" style="accent-color: var(--accent); width: 18px; height: 18px">Только для меня</label>
+</div>
+<button type="button" style="height: 50px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 16px">Опубликовать</button>
+<button type="button" style="height: 46px; border-radius: 8px; border: 1px solid var(--line2); background: transparent; color: var(--text); font-size: 15px">Сохранить черновик</button>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"lang":{"editor":"enum","options":["ru","en"],"default":"ru"},"$preview":{"width":1600,"height":1500}}'>
+class Component extends DCLogic {
+themeVals() {
+const s = this.state || {};
+const theme = s.theme || this.props.theme || 'dark';
+const lang = s.lang || this.props.lang || 'ru';
+return {
+themeClass: 'th-' + theme, isDark: theme === 'dark', isLight: theme !== 'dark',
+toggleTheme: () => this.setState({theme: theme === 'dark' ? 'light' : 'dark'}),
+setRu: () => this.setState({lang: 'ru'}), setEn: () => this.setState({lang: 'en'}),
+ruBg: lang === 'ru' ? 'var(--raised)' : 'transparent', enBg: lang === 'en' ? 'var(--raised)' : 'transparent',
+ruFg: lang === 'ru' ? 'var(--text)' : 'var(--muted)', enFg: lang === 'en' ? 'var(--text)' : 'var(--muted)',
+ruOn: lang === 'ru', enOn: lang === 'en'
+};
+}
+renderVals() {
+const cats = ['1А','1Б','2А','2Б','3А','3Б','4А','4Б','5А','5Б','6А','6Б'];
+const checks = [
+{t:'Основное', s:'готово', ok:true},
+{t:'GPS-трек', s:'1 файл', ok:true},
+{t:'Фото', s:'5', ok:true},
+{t:'Описание', s:'пусто', ok:false},
+{t:'Архив PDF', s:'необязательно', ok:true}
+];
+return {
+...this.themeVals(),
+cats: cats.map(n => n === '2А'
+? {n, bd:'var(--accent)', bg:'var(--accent)', fg:'var(--on-accent)'}
+: {n, bd:'var(--line2)', bg:'transparent', fg:'var(--text2)'}),
+checks: checks.map(c => ({...c, mark: c.ok ? '✓' : '', bd: c.ok ? 'var(--accent)' : 'var(--line2)', bg: c.ok ? 'var(--accent)' : 'transparent'}))
+};
+}
+}
+</script>
+</body>
+</html>

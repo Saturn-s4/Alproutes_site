@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Адаптация 1600 → 4K</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#0A0B0D;font-family:'IBM Plex Sans',sans-serif;color:#EDEEF0}
+</style>
+</helmet>
+<div style="width: 1600px; height: 900px; box-sizing: border-box; padding: 48px; display: flex; flex-direction: column; gap: 28px; background: #0A0B0D">
+<div style="display: flex; align-items: baseline; gap: 20px">
+<h1 style="margin: 0; font-family: Unbounded, sans-serif; font-weight: 700; font-size: 28px">Сетка от 1600 до 4K</h1>
+<span style="font-size: 14px; color: #9AA0AA">Схемы в едином масштабе 1:7 · оранжевым — зона, которая растёт</span>
+</div>
+
+<div style="display: flex; gap: 24px; align-items: flex-end">
+<sc-for list="{{bps}}" as="b" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="width: {{b.w}}; height: {{b.h}}; border: 1px solid #2B2F37; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; background: #0E1013">
+<div style="height: 8px; background: #1F2229"></div>
+<div style="flex-grow: 1; display: flex">
+<div style="width: {{b.side}}; background: #161920; border-right: 1px solid #2B2F37"></div>
+<div style="flex-grow: 1; background: rgba(47,107,255,0.22); border: 1px solid rgba(240,140,80,0.8)"></div>
+<div style="width: {{b.panel}}; background: #161920; border-left: 1px solid #2B2F37"></div>
+<sc-if value="{{b.extra}}" hint-placeholder-val="{{false}}"><div style="width: {{b.extraW}}; background: #1B1F27; border-left: 1px solid #2B2F37"></div></sc-if>
+</div>
+</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #EDEEF0">{{b.label}}</div>
+<div style="font-size: 13px; color: #9AA0AA">{{b.note}}</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display: grid; grid-template-columns: 260px repeat(4, minmax(0, 1fr)); border: 1px solid #1F2229; border-radius: 8px; overflow: hidden; font-size: 14px">
+<sc-for list="{{table}}" as="row" hint-placeholder-count="6">
+<div style="padding: 11px 16px; background: {{row.bg}}; color: #9AA0AA; border-bottom: 1px solid #1F2229">{{row.k}}</div>
+<div style="padding: 11px 16px; background: {{row.bg}}; font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #1F2229">{{row.a}}</div>
+<div style="padding: 11px 16px; background: {{row.bg}}; font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #1F2229">{{row.b}}</div>
+<div style="padding: 11px 16px; background: {{row.bg}}; font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #1F2229">{{row.c}}</div>
+<div style="padding: 11px 16px; background: {{row.bg}}; font-family: 'JetBrains Mono', monospace; border-bottom: 1px solid #1F2229; color: #F6B38A">{{row.d}}</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<sc-for list="{{palettes}}" as="p" hint-placeholder-count="2">
+<div style="display: flex; gap: 12px; align-items: center">
+<div style="width: 110px; flex-shrink: 0; font-size: 14px; color: #C5C9D0">{{p.name}}</div>
+<sc-for list="{{p.items}}" as="s" hint-placeholder-count="9">
+<div style="flex-grow: 1; flex-basis: 0; display: flex; flex-direction: column; gap: 6px">
+<div style="height: 40px; border-radius: 6px; background: {{s.hex}}; border: 1px solid #2B2F37"></div>
+<div style="font-size: 12px; color: #C5C9D0; white-space: nowrap">{{s.name}} <span style="font-family: 'JetBrains Mono', monospace; color: #9AA0AA">{{s.hex}}</span></div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+const k = 1/7;
+const px = v => Math.round(v * k) + 'px';
+const bps = [
+{W:1600,H:900,side:360,panel:420,label:'1600 × 900',note:'база, 100%'},
+{W:1920,H:1080,side:400,panel:460,label:'1920 × 1080',note:'Full HD'},
+{W:2560,H:1440,side:480,panel:560,label:'2560 × 1440',note:'QHD / 4K при 150%'},
+{W:3840,H:2160,side:560,panel:640,extraW:640,label:'3840 × 2160',note:'4K при 100%: + колонка фото и отзывов'}
+];
+return {
+bps: bps.map(b => ({label:b.label, note:b.note, w:px(b.W), h:px(b.H), side:px(b.side), panel:px(b.panel), extra: !!b.extraW, extraW: px(b.extraW || 0)})),
+table: [
+{k:'', a:'1600–1919', b:'1920–2559', c:'2560–3199', d:'3200–3840+'},
+{k:'Базовый шрифт (rem)', a:'14 px', b:'15 px', c:'17 px', d:'20 px'},
+{k:'Список маршрутов', a:'360 px', b:'400 px', c:'480 px', d:'560 px'},
+{k:'Панель маршрута', a:'420 px', b:'460 px', c:'560 px', d:'640 px + 640 px'},
+{k:'Карточек в ряд (вариант B)', a:'3', b:'4', c:'5', d:'6–7'},
+{k:'Макс. ширина текста', a:'70ch', b:'70ch', c:'72ch', d:'72ch, 2 колонки'}
+].map((r,i) => ({...r, bg: i === 0 ? '#15181D' : '#0E1013'})),
+palettes: [
+{name:'Тёмная тема', items:[{name:'Фон',hex:'#0A0B0D'},{name:'Поверхн.',hex:'#0E1013'},{name:'Линия',hex:'#1F2229'},{name:'Текст',hex:'#EDEEF0'},{name:'Втор.',hex:'#9AA0AA'},{name:'Оранж.',hex:'#F08C50'},{name:'Ор. текст',hex:'#F6B38A'},{name:'Синий',hex:'#2F6BFF'},{name:'Ссылки',hex:'#6FA3FF'}]},
+{name:'Светлая тема', items:[{name:'Фон',hex:'#F5F4F1'},{name:'Поверхн.',hex:'#FFFFFF'},{name:'Линия',hex:'#E4E2DC'},{name:'Текст',hex:'#15161A'},{name:'Втор.',hex:'#5F636B'},{name:'Оранж.',hex:'#EE8B52'},{name:'Ор. текст',hex:'#B0561F'},{name:'Синий',hex:'#2D62E6'},{name:'Ссылки',hex:'#2255D0'}]}
+]
+};
+}
+}
+</script>
+</body>
+</html>

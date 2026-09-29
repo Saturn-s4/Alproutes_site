@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Профиль и настройки</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',sans-serif}
+.th-dark{--bg:#0A0B0D;--surface:#0E1013;--surface2:#14171C;--raised:#1C1F25;--line:#1F2229;--line2:#2B2F37;--text:#EDEEF0;--text2:#C5C9D0;--muted:#9AA0AA;--faint:#7D838E;--accent:#F08C50;--accent-text:#F6B38A;--accent-soft:rgba(240,140,80,0.14);--on-accent:#0A0B0D;--blue:#2F6BFF;--blue-text:#6FA3FF;--blue-hover:#9CC0FF;--blue-soft:rgba(47,107,255,0.16);--map:#0C0F14;--photo:#151A22;--photo2:#1C2330;--photo3:#2A3444;--overlay:rgba(14,16,19,0.92);color-scheme:dark}
+.th-light{--bg:#F5F4F1;--surface:#FFFFFF;--surface2:#F3F2EF;--raised:#E8E6E1;--line:#E4E2DC;--line2:#D3D0C8;--text:#15161A;--text2:#3B3F46;--muted:#5F636B;--faint:#6E727A;--accent:#EE8B52;--accent-text:#B0561F;--accent-soft:rgba(238,139,82,0.16);--on-accent:#15161A;--blue:#2D62E6;--blue-text:#2255D0;--blue-hover:#173FA3;--blue-soft:rgba(45,98,230,0.12);--map:#EDF1F6;--photo:#DDE3EB;--photo2:#C9D2DE;--photo3:#B5C0CF;--overlay:rgba(255,255,255,0.94);color-scheme:light}
+.th-dark,.th-light{background:var(--bg);color:var(--text)}
+.th-dark a,.th-light a{color:var(--blue-text);text-decoration:none}.th-dark a:hover,.th-light a:hover{color:var(--blue-hover)}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+button,input,select{font-family:inherit}
+</style>
+</helmet>
+<div class="{{themeClass}}" style="width: 1600px; height: 900px; display: flex; flex-direction: column; background: var(--bg); overflow: hidden">
+
+<header style="height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 28px; padding: 0 20px; border-bottom: 1px solid var(--line)">
+<div style="display: flex; align-items: center; gap: 10px">
+<svg width="26" height="26" viewBox="0 0 26 26" fill="none"><path d="M2 22 L10 8 L14 14 L17 10 L24 22 Z" stroke-width="2" stroke-linejoin="round" style="stroke: var(--accent)"></path></svg>
+<span style="font-family: Unbounded, sans-serif; font-weight: 700; font-size: 16px">ALPROUTES</span>
+</div>
+<nav style="display: flex; gap: 4px; font-size: 14px">
+<a href="Main.dc.html" style="padding: 8px 14px; border-radius: 6px; color: var(--muted)">Карта</a>
+<a href="#" style="padding: 8px 14px; border-radius: 6px; color: var(--muted)">Каталог</a>
+<a href="#" style="padding: 8px 14px; border-radius: 6px; background: var(--raised); color: var(--text)">Мои треки</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<div role="group" aria-label="Язык интерфейса" style="display: flex; gap: 2px; padding: 3px; border: 1px solid var(--line2); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+<button aria-pressed="{{ruOn}}" onClick="{{setRu}}" style="height: 28px; min-width: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: {{ruBg}}; color: {{ruFg}}; cursor: pointer">RU</button>
+<button aria-pressed="{{enOn}}" onClick="{{setEn}}" style="height: 28px; min-width: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: {{enBg}}; color: {{enFg}}; cursor: pointer">EN</button>
+</div>
+<button aria-label="Переключить тему" onClick="{{toggleTheme}}" style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--line2); background: transparent; color: var(--text2); display: flex; align-items: center; justify-content: center; cursor: pointer">
+<sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></sc-if>
+<sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></sc-if>
+</button>
+<a href="Upload.dc.html" style="height: 36px; padding: 0 16px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 14px; display: flex; align-items: center">+ Добавить маршрут</a>
+</header>
+
+<div style="flex-grow: 1; display: flex; gap: 28px; padding: 28px 40px; min-height: 0">
+
+<aside style="width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px">
+<div style="width: 96px; height: 96px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-family: Unbounded, sans-serif; font-weight: 700; font-size: 30px; display: flex; align-items: center; justify-content: center">СО</div>
+<div>
+<div style="font-family: Unbounded, sans-serif; font-weight: 700; font-size: 22px">[Имя пользователя]</div>
+<div style="margin-top: 4px; font-size: 14px; color: var(--muted)">@s.olennikov · [город]</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden">
+<div style="background: var(--surface); padding: 12px"><div style="font-family: 'JetBrains Mono', monospace; font-size: 20px">[12]</div><div style="font-size: 12px; color: var(--muted)">маршрутов</div></div>
+<div style="background: var(--surface); padding: 12px"><div style="font-family: 'JetBrains Mono', monospace; font-size: 20px">[34]</div><div style="font-size: 12px; color: var(--muted)">треков</div></div>
+<div style="background: var(--surface); padding: 12px"><div style="font-family: 'JetBrains Mono', monospace; font-size: 20px">[57]</div><div style="font-size: 12px; color: var(--muted)">отзывов</div></div>
+</div>
+<button type="button" style="height: 42px; border-radius: 8px; border: 1px solid var(--line2); background: transparent; color: var(--text); font-size: 14px">Редактировать профиль</button>
+</aside>
+
+<main style="flex-grow: 1; display: flex; flex-direction: column; gap: 16px; min-width: 0">
+<div style="display: flex; gap: 28px; border-bottom: 1px solid var(--line); font-size: 15px">
+<a href="#" style="padding: 12px 0; color: var(--text); box-shadow: inset 0 -2px 0 var(--accent)">Мои маршруты</a>
+<a href="#" style="padding: 12px 0; color: var(--muted)">Треки</a>
+<a href="#" style="padding: 12px 0; color: var(--muted)">Избранное</a>
+<a href="#" style="padding: 12px 0; color: var(--muted)">Отзывы</a>
+</div>
+<sc-for list="{{mine}}" as="m" hint-placeholder-count="6">
+<div style="display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line)">
+<div style="width: 64px; height: 48px; border-radius: 6px; background: var(--photo); flex-shrink: 0"></div>
+<div style="width: 44px; font-family: 'JetBrains Mono', monospace; color: var(--accent-text); font-size: 15px">{{m.cat}}</div>
+<div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 600; font-size: 15px">{{m.peak}}</span>
+<span style="font-size: 13px; color: var(--muted)">{{m.meta}}</span>
+</div>
+<span style="padding: 3px 10px; border-radius: 12px; background: {{m.stBg}}; color: {{m.stFg}}; font-size: 12px">{{m.st}}</span>
+<a href="#" style="font-size: 14px">Изменить</a>
+</div>
+</sc-for>
+</main>
+
+<aside style="width: 400px; flex-shrink: 0; padding: 22px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 22px; align-self: flex-start">
+<div style="font-family: Unbounded, sans-serif; font-weight: 500; font-size: 17px">Настройки интерфейса</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: var(--muted)">Тема</span>
+<div role="group" aria-label="Тема" style="display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface2); font-size: 14px">
+<sc-for list="{{modes}}" as="o" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{o.on}}" onClick="{{o.pick}}" style="flex-grow: 1; flex-basis: 0; height: 38px; border: 0; border-radius: 7px; background: {{o.bg}}; color: {{o.fg}}; box-shadow: {{o.sh}}; cursor: pointer">{{o.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: var(--muted)">Язык</span>
+<div role="group" aria-label="Язык" style="display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface2); font-size: 14px">
+<button type="button" aria-pressed="{{ruOn}}" onClick="{{setRu}}" style="flex-grow: 1; flex-basis: 0; height: 38px; border: 0; border-radius: 7px; background: {{ruCard}}; color: {{ruFg}}; cursor: pointer">Русский</button>
+<button type="button" aria-pressed="{{enOn}}" onClick="{{setEn}}" style="flex-grow: 1; flex-basis: 0; height: 38px; border: 0; border-radius: 7px; background: {{enCard}}; color: {{enFg}}; cursor: pointer">English</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; color: var(--muted)">Единицы</span>
+<div style="display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--surface2); font-size: 14px">
+<button type="button" style="flex-grow: 1; flex-basis: 0; height: 38px; border: 0; border-radius: 7px; background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--line)">Метры</button>
+<button type="button" style="flex-grow: 1; flex-basis: 0; height: 38px; border: 0; border-radius: 7px; background: transparent; color: var(--muted)">Футы</button>
+</div>
+</div>
+
+<label style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--muted)">Карта по умолчанию
+<select style="height: 42px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--surface2); color: var(--text); font-size: 14px"><option>Топографическая</option><option>Спутник</option><option>Рельеф</option></select>
+</label>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding-top: 6px; border-top: 1px solid var(--line)">
+<label style="display: flex; align-items: center; gap: 12px; font-size: 14px"><span style="flex-grow: 1">Новые отзывы на мои маршруты</span><span style="width: 40px; height: 22px; border-radius: 11px; background: var(--accent); position: relative"><span style="position: absolute; right: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--surface)"></span></span></label>
+<label style="display: flex; align-items: center; gap: 12px; font-size: 14px"><span style="flex-grow: 1">Ответы на мои комментарии</span><span style="width: 40px; height: 22px; border-radius: 11px; background: var(--raised); position: relative"><span style="position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted)"></span></span></label>
+</div>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"lang":{"editor":"enum","options":["ru","en"],"default":"ru"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+themeVals() {
+const s = this.state || {};
+const theme = s.theme || this.props.theme || 'dark';
+const lang = s.lang || this.props.lang || 'ru';
+return {
+themeClass: 'th-' + theme, isDark: theme === 'dark', isLight: theme !== 'dark',
+toggleTheme: () => this.setState({theme: theme === 'dark' ? 'light' : 'dark'}),
+setRu: () => this.setState({lang: 'ru'}), setEn: () => this.setState({lang: 'en'}),
+ruBg: lang === 'ru' ? 'var(--raised)' : 'transparent', enBg: lang === 'en' ? 'var(--raised)' : 'transparent',
+ruFg: lang === 'ru' ? 'var(--text)' : 'var(--muted)', enFg: lang === 'en' ? 'var(--text)' : 'var(--muted)',
+ruOn: lang === 'ru', enOn: lang === 'en'
+};
+}
+renderVals() {
+const T = this.themeVals();
+const s = this.state || {};
+const mode = s.mode || (T.isDark ? 'dark' : 'light');
+const on = {bg:'var(--surface)', fg:'var(--text)', sh:'0 0 0 1px var(--line)'};
+const off = {bg:'transparent', fg:'var(--muted)', sh:'none'};
+const modes = [['dark','Тёмная'],['light','Светлая'],['system','Как в системе']].map(([id,label]) => ({
+id, label, on: mode === id, ...(mode === id ? on : off),
+pick: () => this.setState({mode: id, theme: id === 'light' ? 'light' : 'dark'})
+}));
+const mine = [
+{peak:'Эльбрус Западный — классика с юга', cat:'2А', meta:'обновлён 12.09 · 14 треков · 42 отзыва', st:'Опубликован', pub:true},
+{peak:'Виа-Тау — по гребню', cat:'1Б', meta:'обновлён 03.08 · 3 трека · 27 отзывов', st:'Опубликован', pub:true},
+{peak:'[Вершина] — [маршрут]', cat:'2Б', meta:'нет описания', st:'Черновик'},
+{peak:'[Вершина] — [маршрут]', cat:'3А', meta:'по ссылке · 1 трек', st:'По ссылке'}
+];
+return {
+...T,
+modes,
+ruCard: T.ruOn ? 'var(--surface)' : 'transparent', enCard: T.enOn ? 'var(--surface)' : 'transparent',
+mine: mine.map(m => ({...m, stBg: m.pub ? 'var(--blue-soft)' : 'var(--raised)', stFg: m.pub ? 'var(--blue-text)' : 'var(--muted)'}))
+};
+}
+}
+</script>
+</body>
+</html>

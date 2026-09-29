@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>B · Каталог-журнал</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',sans-serif}
+.th-dark{--bg:#0A0B0D;--surface:#0E1013;--surface2:#14171C;--raised:#1C1F25;--line:#1F2229;--line2:#2B2F37;--text:#EDEEF0;--text2:#C5C9D0;--muted:#9AA0AA;--faint:#7D838E;--accent:#F08C50;--accent-text:#F6B38A;--accent-soft:rgba(240,140,80,0.14);--on-accent:#0A0B0D;--blue:#2F6BFF;--blue-text:#6FA3FF;--blue-hover:#9CC0FF;--blue-soft:rgba(47,107,255,0.16);--map:#0C0F14;--photo:#151A22;--photo2:#1C2330;--photo3:#2A3444;--overlay:rgba(14,16,19,0.92);color-scheme:dark}
+.th-light{--bg:#F5F4F1;--surface:#FFFFFF;--surface2:#F3F2EF;--raised:#E8E6E1;--line:#E4E2DC;--line2:#D3D0C8;--text:#15161A;--text2:#3B3F46;--muted:#5F636B;--faint:#6E727A;--accent:#EE8B52;--accent-text:#B0561F;--accent-soft:rgba(238,139,82,0.16);--on-accent:#15161A;--blue:#2D62E6;--blue-text:#2255D0;--blue-hover:#173FA3;--blue-soft:rgba(45,98,230,0.12);--map:#EDF1F6;--photo:#DDE3EB;--photo2:#C9D2DE;--photo3:#B5C0CF;--overlay:rgba(255,255,255,0.94);color-scheme:light}
+.th-dark,.th-light{background:var(--bg);color:var(--text)}
+.th-dark a,.th-light a{color:var(--blue-text);text-decoration:none}.th-dark a:hover,.th-light a:hover{color:var(--blue-hover)}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+button{font-family:inherit}
+</style>
+</helmet>
+<div class="{{themeClass}}" style="width: 1600px; height: 900px; display: flex; flex-direction: column; background: var(--bg); overflow: hidden">
+
+<header style="height: 64px; flex-shrink: 0; display: flex; align-items: center; gap: 32px; padding: 0 32px; border-bottom: 1px solid var(--line)">
+<span style="font-family: Unbounded, sans-serif; font-weight: 700; font-size: 17px; letter-spacing: 0.02em">ALP<span style="color: var(--accent)">/</span>ROUTES</span>
+<nav style="display: flex; gap: 24px; font-size: 14px">
+<a href="#" style="color: var(--text); padding: 21px 0; box-shadow: inset 0 -2px 0 var(--accent)">Каталог</a>
+<a href="#" style="color: var(--muted); padding: 21px 0">Карта</a>
+<a href="#" style="color: var(--muted); padding: 21px 0">Районы</a>
+<a href="#" style="color: var(--muted); padding: 21px 0">Мои треки</a>
+</nav>
+<div style="flex-grow: 1"></div>
+<label style="width: 360px; height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-radius: 19px; background: var(--surface2); color: var(--faint); font-size: 14px">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+<input type="search" placeholder="Поиск по каталогу" style="flex-grow: 1; background: transparent; border: 0; outline: none; color: var(--text); font: inherit">
+</label>
+<button style="height: 38px; padding: 0 18px; border-radius: 19px; border: 0; background: var(--blue); color: #FFFFFF; font-weight: 600; font-size: 14px">Загрузить трек</button>
+<div role="group" aria-label="Язык интерфейса" style="display: flex; gap: 2px; padding: 3px; border: 1px solid var(--line2); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+<button aria-pressed="{{ruOn}}" onClick="{{setRu}}" style="height: 28px; min-width: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: {{ruBg}}; color: {{ruFg}}; cursor: pointer">RU</button>
+<button aria-pressed="{{enOn}}" onClick="{{setEn}}" style="height: 28px; min-width: 34px; padding: 0 8px; border: 0; border-radius: 6px; background: {{enBg}}; color: {{enFg}}; cursor: pointer">EN</button>
+</div>
+<button aria-label="Переключить тему" onClick="{{toggleTheme}}" style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--line2); background: transparent; color: var(--text2); display: flex; align-items: center; justify-content: center; cursor: pointer">
+<sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></sc-if>
+<sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></sc-if>
+</button>
+<button aria-label="Профиль" style="width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 14px">СО</button>
+</header>
+
+<div style="flex-grow: 1; display: flex; min-height: 0">
+
+<aside style="width: 260px; flex-shrink: 0; padding: 28px 24px 28px 32px; display: flex; flex-direction: column; gap: 28px; border-right: 1px solid var(--line); font-size: 14px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted)">Категория</div>
+<sc-for list="{{cats}}" as="c" hint-placeholder-count="6">
+<label style="display: flex; align-items: center; gap: 10px; color: {{c.fg}}"><span style="width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid {{c.box}}; background: {{c.fill}}"></span><span style="font-family: 'JetBrains Mono', monospace">{{c.name}}</span><span style="margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--faint)">{{c.n}}</span></label>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted)">Район</div>
+<div style="color: var(--text)">Приэльбрусье</div>
+<div style="color: var(--muted)">Безенги</div>
+<div style="color: var(--muted)">Цей</div>
+<div style="color: var(--muted)">Памир</div>
+<a href="#" style="font-size: 13px">Все районы →</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted)">Материалы</div>
+<div style="display: flex; gap: 6px; flex-wrap: wrap">
+<span style="padding: 4px 10px; border-radius: 12px; background: var(--blue-soft); color: var(--blue-text); font-size: 13px">GPX-трек</span>
+<span style="padding: 4px 10px; border-radius: 12px; background: var(--surface2); color: var(--text2); font-size: 13px">PDF</span>
+<span style="padding: 4px 10px; border-radius: 12px; background: var(--surface2); color: var(--text2); font-size: 13px">Фото</span>
+</div>
+</div>
+</aside>
+
+<main style="flex-grow: 1; padding: 28px 32px; display: flex; flex-direction: column; gap: 22px; min-width: 0; overflow: hidden">
+<div style="display: flex; align-items: flex-end; justify-content: space-between">
+<div>
+<h1 style="margin: 0; font-family: Unbounded, sans-serif; font-weight: 700; font-size: 40px; line-height: 1">Приэльбрусье</h1>
+<div style="margin-top: 10px; font-size: 14px; color: var(--muted)"><span style="font-family: 'JetBrains Mono', monospace; color: var(--accent)">46</span> маршрутов · 1Б–3А · обновлено сегодня</div>
+</div>
+<div style="display: flex; gap: 4px; padding: 4px; border-radius: 8px; background: var(--surface2); font-size: 13px">
+<button style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--raised); color: var(--text)">Популярные</button>
+<button style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--muted)">По высоте</button>
+<button style="height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--muted)">Новые</button>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px">
+<sc-for list="{{cards}}" as="c" hint-placeholder-count="6">
+<div style="border-radius: 12px; background: var(--surface); border: 1px solid {{c.border}}; overflow: hidden; display: flex; flex-direction: column">
+<div style="height: 150px; position: relative; background: var(--photo)">
+<svg viewBox="0 0 300 150" preserveAspectRatio="none" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%"><path d="{{c.ridge}}" style="fill: var(--photo2)"></path></svg>
+<span style="position: absolute; top: 10px; left: 10px; padding: 2px 8px; border-radius: 4px; background: {{c.catBg}}; color: {{c.catFg}}; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500">{{c.cat}}</span>
+<span style="position: absolute; bottom: 10px; left: 10px; font-size: 11px; color: var(--faint)">[фото]</span>
+</div>
+<div style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-family: Unbounded, sans-serif; font-weight: 500; font-size: 16px">{{c.peak}}</div>
+<div style="font-size: 13px; color: var(--muted)">{{c.name}}</div>
+<div style="display: flex; gap: 14px; margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text2)">
+<span>{{c.h}}</span><span style="color: var(--blue-text)">{{c.mat}}</span><span style="margin-left: auto; color: var(--muted)">{{c.rev}}</span>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</main>
+
+<aside style="width: 440px; flex-shrink: 0; position: relative; border-left: 1px solid var(--line); background: var(--map); overflow: hidden">
+<svg viewBox="0 0 440 836" preserveAspectRatio="xMidYMid slice" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%">
+<rect width="440" height="836" style="fill: var(--map)"></rect>
+<g fill="none" stroke-opacity="0.45" stroke-width="1" style="stroke: var(--blue)">
+<ellipse cx="220" cy="300" rx="26" ry="16"></ellipse><ellipse cx="216" cy="306" rx="56" ry="36"></ellipse><ellipse cx="210" cy="314" rx="92" ry="60"></ellipse><ellipse cx="202" cy="324" rx="134" ry="88"></ellipse><ellipse cx="192" cy="336" rx="180" ry="120"></ellipse><ellipse cx="180" cy="350" rx="232" ry="158"></ellipse>
+<ellipse cx="300" cy="620" rx="30" ry="20"></ellipse><ellipse cx="306" cy="628" rx="66" ry="44"></ellipse><ellipse cx="314" cy="638" rx="108" ry="72"></ellipse><ellipse cx="324" cy="650" rx="156" ry="104"></ellipse>
+</g>
+<circle cx="220" cy="300" r="8" style="fill: var(--accent)"></circle><circle cx="300" cy="620" r="6" style="fill: var(--blue-text)"></circle><circle cx="120" cy="470" r="6" style="fill: var(--blue-text)"></circle><circle cx="360" cy="420" r="6" style="fill: var(--blue-text)"></circle><circle cx="90" cy="700" r="6" style="fill: var(--blue-text)"></circle>
+</svg>
+<div style="position: absolute; left: 16px; right: 16px; bottom: 16px; padding: 14px 16px; border-radius: 10px; background: var(--overlay); border: 1px solid var(--line2); display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; color: var(--muted)">На карте · выбран</div>
+<div style="font-weight: 600; font-size: 15px">Эльбрус Западный — классика с юга</div>
+<div style="display: flex; gap: 8px; margin-top: 8px">
+<button style="flex-grow: 1; height: 40px; border: 0; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 14px">Открыть маршрут</button>
+<button style="height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--blue); background: transparent; color: var(--blue-text); font-size: 14px">GPX</button>
+</div>
+</div>
+<button style="position: absolute; top: 16px; left: 16px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line2); background: var(--overlay); color: var(--text); font-size: 13px">Развернуть карту ⤢</button>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"lang":{"editor":"enum","options":["ru","en"],"default":"ru"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+themeVals() {
+const s = this.state || {};
+const theme = s.theme || this.props.theme || 'dark';
+const lang = s.lang || this.props.lang || 'ru';
+return {
+themeClass: 'th-' + theme, isDark: theme === 'dark', isLight: theme !== 'dark',
+toggleTheme: () => this.setState({theme: theme === 'dark' ? 'light' : 'dark'}),
+setRu: () => this.setState({lang: 'ru'}), setEn: () => this.setState({lang: 'en'}),
+ruBg: lang === 'ru' ? 'var(--raised)' : 'transparent', enBg: lang === 'en' ? 'var(--raised)' : 'transparent',
+ruFg: lang === 'ru' ? 'var(--text)' : 'var(--muted)', enFg: lang === 'en' ? 'var(--text)' : 'var(--muted)',
+ruOn: lang === 'ru', enOn: lang === 'en'
+};
+}
+renderVals() {
+const T = this.themeVals();
+const accent = 'var(--accent)';
+const ridges = ['M0 150 L60 80 L110 110 L170 30 L220 90 L300 60 L300 150 Z','M0 150 L40 110 L120 50 L170 90 L240 40 L300 100 L300 150 Z','M0 150 L80 60 L130 100 L190 70 L250 20 L300 70 L300 150 Z'];
+const data = [
+{peak:'Эльбрус Западный', name:'Классика с юга', cat:'2А', h:'5642 м', mat:'GPX · PDF', rev:'42 отзыва', sel:true},
+{peak:'Эльбрус Восточный', name:'С севера', cat:'2А', h:'5621 м', mat:'GPX', rev:'18 отзывов'},
+{peak:'Виа-Тау', name:'По гребню', cat:'1Б', h:'3785 м', mat:'GPX · PDF', rev:'27 отзывов'},
+{peak:'Гумачи', name:'С перевала', cat:'1Б', h:'3805 м', mat:'GPX', rev:'9 отзывов'},
+{peak:'[Вершина]', name:'[Маршрут]', cat:'2Б', h:'[высота]', mat:'PDF', rev:'—'},
+{peak:'[Вершина]', name:'[Маршрут]', cat:'3А', h:'[высота]', mat:'GPX', rev:'—'}
+];
+const cats = [['1А',4],['1Б',14,true],['2А',17,true],['2Б',7],['3А',4],['3Б+',0]];
+return {...T,
+accent,
+blue: 'var(--blue)',
+cards: data.map((c,i) => ({...c, ridge: ridges[i%3], border: c.sel ? accent : 'var(--line)', catBg: c.sel ? accent : 'var(--overlay)', catFg: c.sel ? 'var(--bg)' : 'var(--accent-text)'})),
+cats: cats.map(([name,n,on]) => ({name, n, fg: on ? 'var(--text)' : 'var(--muted)', box: on ? accent : 'var(--line2)', fill: on ? accent : 'transparent'}))
+};
+}
+}
+</script>
+</body>
+</html>

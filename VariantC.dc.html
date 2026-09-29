@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>C · Технический / топо</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap">
+<style>
+body{margin:0;font-family:'IBM Plex Sans',sans-serif}
+.th-dark{--bg:#0A0B0D;--surface:#0E1013;--surface2:#14171C;--raised:#1C1F25;--line:#1F2229;--line2:#2B2F37;--text:#EDEEF0;--text2:#C5C9D0;--muted:#9AA0AA;--faint:#7D838E;--accent:#F08C50;--accent-text:#F6B38A;--accent-soft:rgba(240,140,80,0.14);--on-accent:#0A0B0D;--blue:#2F6BFF;--blue-text:#6FA3FF;--blue-hover:#9CC0FF;--blue-soft:rgba(47,107,255,0.16);--map:#0C0F14;--photo:#151A22;--photo2:#1C2330;--photo3:#2A3444;--overlay:rgba(14,16,19,0.92);color-scheme:dark}
+.th-light{--bg:#F5F4F1;--surface:#FFFFFF;--surface2:#F3F2EF;--raised:#E8E6E1;--line:#E4E2DC;--line2:#D3D0C8;--text:#15161A;--text2:#3B3F46;--muted:#5F636B;--faint:#6E727A;--accent:#EE8B52;--accent-text:#B0561F;--accent-soft:rgba(238,139,82,0.16);--on-accent:#15161A;--blue:#2D62E6;--blue-text:#2255D0;--blue-hover:#173FA3;--blue-soft:rgba(45,98,230,0.12);--map:#EDF1F6;--photo:#DDE3EB;--photo2:#C9D2DE;--photo3:#B5C0CF;--overlay:rgba(255,255,255,0.94);color-scheme:light}
+.th-dark,.th-light{background:var(--bg);color:var(--text)}
+.th-dark a,.th-light a{color:var(--blue-text);text-decoration:none}.th-dark a:hover,.th-light a:hover{color:var(--blue-hover)}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+button{font-family:inherit}
+</style>
+</helmet>
+<div class="{{themeClass}}" style="width: 1600px; height: 900px; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; font-family: 'JetBrains Mono', monospace">
+
+<header style="height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 24px; padding: 0 20px; border-bottom: 1px solid var(--line2); font-size: 13px">
+<span style="font-weight: 700; color: var(--accent)">▲ ALPROUTES</span>
+<span style="color: var(--faint)">/</span>
+<span style="color: var(--text)">каталог</span>
+<span style="color: var(--faint)">/</span>
+<span style="color: var(--muted)">кавказ</span>
+<div style="flex-grow: 1"></div>
+<label style="width: 420px; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line2); color: var(--faint)">
+<span>⌕</span><input type="search" placeholder="запрос: кат:2А район:приэльбрусье gpx" style="flex-grow: 1; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; font-size: 12px">
+</label>
+<button style="height: 30px; padding: 0 12px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font-size: 12px">+ маршрут</button>
+<div role="group" aria-label="Язык интерфейса" style="display: flex; gap: 2px; padding: 3px; border: 1px solid var(--line2); border-radius: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+<button aria-pressed="{{ruOn}}" onClick="{{setRu}}" style="height: 28px; min-width: 34px; padding: 0 8px; border: 0; border-radius: 0; background: {{ruBg}}; color: {{ruFg}}; cursor: pointer">RU</button>
+<button aria-pressed="{{enOn}}" onClick="{{setEn}}" style="height: 28px; min-width: 34px; padding: 0 8px; border: 0; border-radius: 0; background: {{enBg}}; color: {{enFg}}; cursor: pointer">EN</button>
+</div>
+<button aria-label="Переключить тему" onClick="{{toggleTheme}}" style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 0; border: 1px solid var(--line2); background: transparent; color: var(--text2); display: flex; align-items: center; justify-content: center; cursor: pointer">
+<sc-if value="{{isDark}}" hint-placeholder-val="{{true}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></sc-if>
+<sc-if value="{{isLight}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></sc-if>
+</button>
+<button style="height: 30px; padding: 0 12px; border: 1px solid var(--line2); background: transparent; color: var(--muted); font-size: 12px">s.olennikov</button>
+</header>
+
+<div style="flex-grow: 1; display: flex; min-height: 0">
+
+<section style="width: 960px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line2)">
+<div style="display: flex; gap: 0; border-bottom: 1px solid var(--line2); font-size: 12px">
+<button style="height: 40px; padding: 0 16px; border: 0; border-right: 1px solid var(--line2); background: var(--surface2); color: var(--text)">все · 128</button>
+<button style="height: 40px; padding: 0 16px; border: 0; border-right: 1px solid var(--line2); background: transparent; color: var(--muted)">с gpx · 96</button>
+<button style="height: 40px; padding: 0 16px; border: 0; border-right: 1px solid var(--line2); background: transparent; color: var(--muted)">с pdf · 51</button>
+<button style="height: 40px; padding: 0 16px; border: 0; border-right: 1px solid var(--line2); background: transparent; color: var(--muted)">новые отзывы · 7</button>
+</div>
+<div style="display: grid; grid-template-columns: 40px 200px 220px 60px 80px 150px 50px 50px 70px; align-items: center; height: 36px; padding: 0 12px; border-bottom: 1px solid var(--line2); font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.06em">
+<span>№</span><span>вершина</span><span>маршрут</span><span>кат.</span><span>высота ↓</span><span>район</span><span>gpx</span><span>pdf</span><span>отзывы</span>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="12">
+<div style="display: grid; grid-template-columns: 40px 200px 220px 60px 80px 150px 50px 50px 70px; align-items: center; height: 44px; padding: 0 12px; border-bottom: 1px solid var(--line); font-size: 13px; background: {{r.bg}}; box-shadow: {{r.bar}}; color: {{r.fg}}">
+<span style="color: var(--faint)">{{r.n}}</span>
+<span style="font-family: 'IBM Plex Sans', sans-serif; font-weight: 600">{{r.peak}}</span>
+<span style="font-family: 'IBM Plex Sans', sans-serif; color: var(--muted)">{{r.name}}</span>
+<span style="color: {{r.catC}}">{{r.cat}}</span>
+<span>{{r.h}}</span>
+<span style="font-family: 'IBM Plex Sans', sans-serif; color: var(--muted)">{{r.region}}</span>
+<span style="color: var(--blue-text)">{{r.gpx}}</span>
+<span style="color: var(--blue-text)">{{r.pdf}}</span>
+<span style="color: var(--muted)">{{r.rev}}</span>
+</div>
+</sc-for>
+<div style="flex-grow: 1"></div>
+<div style="height: 36px; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-top: 1px solid var(--line2); font-size: 12px; color: var(--faint)">
+<span>1–12 из 128</span><span style="flex-grow: 1"></span><span>↑↓ выбор</span><span>↵ открыть</span><span>g скачать gpx</span>
+</div>
+</section>
+
+<section style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0">
+<div style="height: 420px; position: relative; border-bottom: 1px solid var(--line2); background: var(--map)">
+<svg viewBox="0 0 640 420" preserveAspectRatio="xMidYMid slice" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%">
+<g fill="none" stroke-width="0.8" stroke-opacity="0.5" style="stroke: var(--blue)">
+<path d="M320 200 m-24 0 a24 14 -20 1 0 48 0 a24 14 -20 1 0 -48 0"></path>
+<path d="M316 206 m-54 0 a54 34 -20 1 0 108 0 a54 34 -20 1 0 -108 0"></path>
+<path d="M310 214 m-90 0 a90 58 -20 1 0 180 0 a90 58 -20 1 0 -180 0"></path>
+<path d="M302 224 m-132 0 a132 86 -20 1 0 264 0 a132 86 -20 1 0 -264 0"></path>
+<path d="M292 236 m-180 0 a180 120 -20 1 0 360 0 a180 120 -20 1 0 -360 0"></path>
+<path d="M280 250 m-236 0 a236 160 -20 1 0 472 0 a236 160 -20 1 0 -472 0"></path>
+<path d="M266 266 m-300 0 a300 206 -20 1 0 600 0 a300 206 -20 1 0 -600 0"></path>
+</g>
+<g stroke-width="1" style="stroke: var(--line2)"><line x1="0" y1="105" x2="640" y2="105"></line><line x1="0" y1="210" x2="640" y2="210"></line><line x1="0" y1="315" x2="640" y2="315"></line><line x1="160" y1="0" x2="160" y2="420"></line><line x1="320" y1="0" x2="320" y2="420"></line><line x1="480" y1="0" x2="480" y2="420"></line></g>
+<path d="M500 400 C470 360 440 330 420 300 S380 250 360 230 S335 210 320 200" fill="none" stroke-width="2.5" style="stroke: var(--accent)"></path>
+<rect x="494" y="394" width="12" height="12" stroke-width="2" style="fill: var(--bg); stroke: var(--accent)"></rect>
+<path d="M320 188 L330 204 L310 204 Z" style="fill: var(--accent)"></path>
+</svg>
+<div style="position: absolute; top: 12px; left: 12px; font-size: 11px; color: var(--muted); background: var(--bg); padding: 4px 8px; border: 1px solid var(--line2)">UTM 38T · 1:25 000 · сетка 1 км</div>
+<div style="position: absolute; top: 12px; right: 12px; display: flex; font-size: 11px">
+<button style="height: 26px; padding: 0 10px; border: 1px solid var(--line2); background: var(--surface2); color: var(--text)">топо</button>
+<button style="height: 26px; padding: 0 10px; border: 1px solid var(--line2); border-left: 0; background: var(--bg); color: var(--muted)">спутник</button>
+<button style="height: 26px; padding: 0 10px; border: 1px solid var(--line2); border-left: 0; background: var(--bg); color: var(--muted)">3d</button>
+</div>
+</div>
+<div style="padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; flex-grow: 1">
+<div style="display: flex; align-items: baseline; gap: 12px">
+<span style="font-family: Unbounded, sans-serif; font-weight: 700; font-size: 22px">Эльбрус Западный</span>
+<span style="color: var(--accent); font-size: 14px">2А</span>
+<span style="color: var(--muted); font-size: 12px; margin-left: auto">id 00142 · ред. 12.09.2026</span>
+</div>
+<svg viewBox="0 0 600 110" style="width: 100%; height: 110px">
+<g style="stroke: var(--line)"><line x1="0" y1="20" x2="600" y2="20"></line><line x1="0" y1="55" x2="600" y2="55"></line><line x1="0" y1="90" x2="600" y2="90"></line></g>
+<path d="M0 96 L60 90 L120 82 L180 74 L240 62 L300 55 L360 46 L400 36 L440 40 L490 24 L550 12 L600 8" fill="none" stroke-width="2" style="stroke: var(--accent)"></path>
+<g font-size="10" font-family="JetBrains Mono, monospace" style="fill: var(--faint)"><text x="4" y="16">5600</text><text x="4" y="51">4800</text><text x="4" y="86">4000</text></g>
+</svg>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--line2)">
+<div style="padding: 10px 12px; border-right: 1px solid var(--line2)"><div style="font-size: 10px; color: var(--faint)">ВЫСОТА</div><div style="font-size: 16px">5642</div></div>
+<div style="padding: 10px 12px; border-right: 1px solid var(--line2)"><div style="font-size: 10px; color: var(--faint)">НАБОР</div><div style="font-size: 16px">+1795</div></div>
+<div style="padding: 10px 12px; border-right: 1px solid var(--line2)"><div style="font-size: 10px; color: var(--faint)">ДЛИНА</div><div style="font-size: 16px">9.4 км</div></div>
+<div style="padding: 10px 12px"><div style="font-size: 10px; color: var(--faint)">ТРЕКОВ</div><div style="font-size: 16px; color: var(--blue-text)">14</div></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button style="flex-grow: 1; height: 44px; border: 0; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 13px">↓ GPX</button>
+<button style="flex-grow: 1; height: 44px; border: 1px solid var(--blue); background: transparent; color: var(--blue-text); font-size: 13px">PDF · 1987, 2004, 2019</button>
+<button style="flex-grow: 1; height: 44px; border: 1px solid var(--line2); background: transparent; color: var(--text); font-size: 13px">42 отзыва →</button>
+</div>
+</div>
+</section>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"lang":{"editor":"enum","options":["ru","en"],"default":"ru"},"$preview":{"width":1600,"height":900}}'>
+class Component extends DCLogic {
+themeVals() {
+const s = this.state || {};
+const theme = s.theme || this.props.theme || 'dark';
+const lang = s.lang || this.props.lang || 'ru';
+return {
+themeClass: 'th-' + theme, isDark: theme === 'dark', isLight: theme !== 'dark',
+toggleTheme: () => this.setState({theme: theme === 'dark' ? 'light' : 'dark'}),
+setRu: () => this.setState({lang: 'ru'}), setEn: () => this.setState({lang: 'en'}),
+ruBg: lang === 'ru' ? 'var(--raised)' : 'transparent', enBg: lang === 'en' ? 'var(--raised)' : 'transparent',
+ruFg: lang === 'ru' ? 'var(--text)' : 'var(--muted)', enFg: lang === 'en' ? 'var(--text)' : 'var(--muted)',
+ruOn: lang === 'ru', enOn: lang === 'en'
+};
+}
+renderVals() {
+const T = this.themeVals();
+const accent = 'var(--accent)';
+const data = [
+['Пик Ленина','По Раздельной','5А','7134','Памир','—','●','11'],
+['Эльбрус Западный','Классика с юга','2А','5642','Приэльбрусье','●','●','42',true],
+['Эльбрус Восточный','С севера','2А','5621','Приэльбрусье','●','—','18'],
+['Казбек','Через ледник Гергети','2А','5033','Казбеги','●','●','35'],
+['Гумачи','С перевала','1Б','3805','Адыл-Су','●','—','9'],
+['Виа-Тау','По гребню','1Б','3785','Адыл-Су','●','●','27'],
+['[Вершина]','[Маршрут]','2Б','[—]','[Район]','●','—','—'],
+['[Вершина]','[Маршрут]','3А','[—]','[Район]','—','●','—'],
+['[Вершина]','[Маршрут]','1Б','[—]','[Район]','●','—','—'],
+['[Вершина]','[Маршрут]','2А','[—]','[Район]','●','●','—'],
+['[Вершина]','[Маршрут]','1А','[—]','[Район]','—','—','—'],
+['[Вершина]','[Маршрут]','2Б','[—]','[Район]','●','—','—']
+];
+return {...T,
+accent,
+blue: 'var(--blue)',
+rows: data.map((d,i) => ({n: String(i+1).padStart(3,'0'), peak:d[0], name:d[1], cat:d[2], h:d[3], region:d[4], gpx:d[5], pdf:d[6], rev:d[7],
+bg: d[8] ? 'var(--accent-soft)' : 'transparent', bar: d[8] ? 'inset 3px 0 0 ' + accent : 'none', fg: d[8] ? 'var(--text)' : 'var(--text)', catC: d[8] ? accent : 'var(--accent-text)'}))
+};
+}
+}
+</script>
+</body>
+</html>
