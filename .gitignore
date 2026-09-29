@@ -1,4 +1,12 @@
-node_modules/
-dist/
+# Editors and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Local secrets and overrides
+.env
+.env.*
+!.env.example
 *.local
-.vite/
