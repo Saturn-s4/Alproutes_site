@@ -25,7 +25,7 @@
 | Слой | Технология |
 |---|---|
 | БД | PostgreSQL 16 + PostGIS 3 |
-| Файлы | S3-совместимое хранилище (MinIO локально) |
+| Файлы | S3-совместимое хранилище (SeaweedFS локально) |
 | Backend | Kotlin + Spring Boot, REST + OpenAPI |
 | Auth | JWT (access + refresh), OAuth через Google/Apple |
 | Android | Kotlin, Jetpack Compose, MVI, Room, Ktor Client, WorkManager, Coil |
@@ -157,7 +157,7 @@
 ## 10. Команды
 
 ```bash
-# Инфраструктура (Postgres+PostGIS, MinIO)
+# Инфраструктура (Postgres+PostGIS, SeaweedFS как S3)
 docker compose -f infra/docker-compose.yml up -d
 
 # Миграции без backend и тесты схемы (подробнее — infra/db/README.md)

@@ -12,6 +12,8 @@ version = "0.1.0"
 
 // Spring Boot's BOM pins Kotlin to its own baseline; keep stdlib in sync with the plugin.
 extra["kotlin.version"] = "2.1.21"
+// Testcontainers 1.21.3 (Boot 3.5.6 default) uses a Docker API version that Docker Engine 29+ rejects.
+extra["testcontainers.version"] = "1.21.4"
 
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }

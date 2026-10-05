@@ -1,12 +1,12 @@
 # Backend
 
-Kotlin + Spring Boot 3.5, Spring JDBC (без JPA), PostgreSQL 16 + PostGIS, Flyway, S3 (MinIO локально).
+Kotlin + Spring Boot 3.5, Spring JDBC (без JPA), PostgreSQL 16 + PostGIS, Flyway, S3 (SeaweedFS локально).
 Контракт — `/shared/openapi.yaml`. DTO написаны вручную по контракту; соответствие проверяют интеграционные тесты.
 
 ## Запуск
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d db minio minio-init
+docker compose -f infra/docker-compose.yml up -d db seaweedfs s3-init
 cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
 ```
 

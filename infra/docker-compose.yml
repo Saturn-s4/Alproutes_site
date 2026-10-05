@@ -1,6 +1,6 @@
-# Local infrastructure: PostgreSQL 16 + PostGIS 3, MinIO (S3), Flyway for migrations.
+# Local infrastructure: PostgreSQL 16 + PostGIS 3, SeaweedFS (S3), Flyway for migrations.
 #
-#   docker compose -f infra/docker-compose.yml up -d                     # db + minio
+#   docker compose -f infra/docker-compose.yml up -d                     # db + s3
 #   docker compose -f infra/docker-compose.yml run --rm flyway migrate   # apply migrations
 #
 # Credentials below are for local development only.
@@ -23,27 +23,28 @@ services:
       timeout: 3s
       retries: 20
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: alproutes
-      MINIO_ROOT_PASSWORD: alproutes-secret
+  # S3-compatible storage. MinIO images were removed from Docker Hub and Quay (Sept 2026),
+  # so local S3 is SeaweedFS. Host port 9000 is kept so backend defaults stay unchanged.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47
+    command: >
+      server -dir=/data -master.volumeSizeLimitMB=1024
+      -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # web console
+      - "9000:8333"   # S3 API
     volumes:
-      - minio-data:/data
+      - seaweedfs-data:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
 
-  # Creates the bucket once MinIO is up.
-  minio-init:
-    image: minio/mc:latest
+  # Creates the bucket once SeaweedFS is up.
+  s3-init:
+    image: chrislusf/seaweedfs:4.47
     depends_on:
-      - minio
+      - seaweedfs
     entrypoint: >
       /bin/sh -c "
-      until mc alias set local http://minio:9000 alproutes alproutes-secret; do sleep 1; done;
-      mc mb --ignore-existing local/alproutes-media;
+      until wget -q -O /dev/null http://seaweedfs:8888/; do sleep 1; done;
+      echo 's3.bucket.create -name alproutes-media' | weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888;
       "
 
   # Not started by `up`: run explicitly (see header). The backend will also run
@@ -66,4 +67,4 @@ services:
 
 volumes:
   db-data:
-  minio-data:
+  seaweedfs-data:
