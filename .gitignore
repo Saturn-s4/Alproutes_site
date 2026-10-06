@@ -10,3 +10,13 @@ Thumbs.db
 .env.*
 !.env.example
 *.local
+
+# SSH keys and certificates must never be committed
+id_rsa*
+id_ed25519*
+id_ecdsa*
+*.pem
+*.key
+*.ppk
+homelaptopGIT*
+olennikovgitkey*
