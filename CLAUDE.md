@@ -99,6 +99,10 @@
 
 ### Web
 - Страницы маршрутов и районов — серверный рендеринг ради индексации поисковиками. Это значимый канал притока пользователей, не жертвовать им ради удобства разработки.
+- `/web` — Next.js, клиент того же API, что и Android. Своей бизнес-логики и своей БД у веба нет: всё через `/api/v1` backend на Kotlin.
+- Дизайн: за основу взят вариант A «Карта в центре» (`web-prototype/design`). Тёмная и светлая темы плюс режим «как в системе», переключатель языка RU/EN, адаптация от 1600 px до 4K. Палитра — чёрный, мягкий оранжевый, синий; токены берутся из `web-prototype/src/styles/tokens.css`.
+- `web-prototype` — референс внешнего вида, не спецификация. Функциональность и данные определяет `/shared/openapi.yaml`. Не переносить из прототипа без изменения контракта: вход по паролю и через VK ID, приватные маршруты и маршруты «по ссылке», отзывы, избранное, «время» и «участки» маршрута, сезоны вместо месяцев, одну российскую категорию вместо нескольких систем.
+- Отличия реализации от прототипа: карта — MapLibre GL JS (не Leaflet); координаты в API — GeoJSON `[lon, lat]` (в прототипе `[lat, lon]`); профиль высот и набор высоты берутся с сервера, а не считаются по сырому GPX; на странице маршрута обязателен дисклеймер (раздел 8); PDF без выясненных прав не показываются.
 
 ---
 
@@ -165,9 +169,12 @@ docker compose -f infra/docker-compose.yml exec db psql -U alproutes -d alproute
 cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
 cd backend && ./gradlew test          # нужен Docker (Testcontainers + PostGIS)
 
-# Web
+# Web (папка /web появится на шаге 3)
 cd web && npm run dev
 cd web && npm run build
+
+# Прототип дизайна (деплоится на GitHub Pages workflow'ом .github/workflows/deploy.yml)
+cd web-prototype && npm install && npm run dev
 
 # Android
 cd android && ./gradlew assembleDebug
