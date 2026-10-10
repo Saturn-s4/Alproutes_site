@@ -84,7 +84,7 @@ export default async function RoutePage({ params }: Props) {
 
           <section className="route-section">
             <h2 className="h2">{t('route.archive')} · <span className="mono">{documents.data.items.length}</span></h2>
-            <Documents documents={documents.data.items} />
+            <Documents routeId={route.id} documents={documents.data.items} />
           </section>
 
           <section className="route-section">

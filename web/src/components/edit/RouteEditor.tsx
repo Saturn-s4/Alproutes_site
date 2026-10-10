@@ -8,6 +8,7 @@ import type { AreaSummary, Grade, LocalizedText, Photo, RouteContentPhoto, Route
 import { cleanText, errorsUnder, fieldErrors, intOrNull, newId, type FieldErrors } from '@/lib/edit';
 import { uploadFile } from '@/lib/upload';
 import { monthName, routeTypeLabel } from '@/lib/i18n';
+import { PhotoUpload } from '../PhotoUpload';
 import { usePrefs } from '../Prefs';
 import { Field, GradesEditor, LocalizedInput, SignInFirst, AreaPicker } from './Fields';
 import { GeometryEditor } from './GeometryEditor';
@@ -280,7 +281,12 @@ export function RouteEditor({ target }: { target: Target }) {
           <LocalizedInput value={form.description} onChange={(v) => set('description', v)} multiline maxLength={100000} />
         </Field>
         {target.kind === 'edit' ? (
-          <DescriptionPhotosField value={form.photos} onChange={(p) => set('photos', p)} photos={routePhotos} errors={err('content.photos')} />
+          <DescriptionPhotosField value={form.photos} onChange={(p) => set('photos', p)} photos={routePhotos} errors={err('content.photos')}
+            routeId={target.routeId} onUploaded={(p) => {
+              setRoutePhotos((xs) => [p, ...xs.filter((x) => x.id !== p.id)]);
+              // A new upload goes into the description right away; repeated callbacks (processing done) do not duplicate it.
+              setForm((f) => (f.photos.some((x) => x.photoId === p.id) ? f : { ...f, photos: [...f.photos, { photoId: p.id }] }));
+            }} />
         ) : (
           <p className="muted">{t('ed.photosAfterCreate')}</p>
         )}
@@ -339,8 +345,11 @@ export function RouteEditor({ target }: { target: Target }) {
 
 /** Which route photos are part of the description, in which order, with catalogue captions. */
 function DescriptionPhotosField({
-  value, onChange, photos, errors,
-}: { value: RouteContentPhoto[]; onChange: (v: RouteContentPhoto[]) => void; photos: Photo[]; errors: string[] }) {
+  value, onChange, photos, errors, routeId, onUploaded,
+}: {
+  value: RouteContentPhoto[]; onChange: (v: RouteContentPhoto[]) => void; photos: Photo[]; errors: string[];
+  routeId: string; onUploaded: (p: Photo) => void;
+}) {
   const { t } = usePrefs();
   const byId = new Map(photos.map((p) => [p.id, p]));
   const available = photos.filter((p) => p.urls && !value.some((v) => v.photoId === p.id));
@@ -387,6 +396,8 @@ function DescriptionPhotosField({
         </>
       )}
       {photos.length === 0 && <span className="muted">{t('ed.noRoutePhotos')}</span>}
+      <PhotoUpload routeId={routeId} onAdded={onUploaded} title={t('ph.uploadToDescription')} />
+      <span className="field-hint">{t('ph.uploadToDescriptionHint')}</span>
     </Field>
   );
 }
