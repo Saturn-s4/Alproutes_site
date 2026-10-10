@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AreaGrid } from '@/components/AreaGrid';
 import { Crumbs } from '@/components/Crumbs';
+import { AreaEditLinks } from '@/components/edit/EditLinks';
 import { RouteList } from '@/components/RouteList';
 import { LText } from '@/components/Text';
 import { serverApi } from '@/lib/api/server';
@@ -49,6 +50,7 @@ export default async function AreaPage({ params, searchParams }: Props) {
           </span>
         )}
       </div>
+      <AreaEditLinks areaId={area.id} />
       {description && (
         <p className="prose" style={{ whiteSpace: 'pre-wrap' }}>
           {description.text}

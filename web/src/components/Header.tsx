@@ -30,7 +30,10 @@ export function Header() {
       </Link>
       <nav className="nav" aria-label={t('nav.main')}>
         <Link href="/" className={navClass(pathname === '/')}>{t('nav.map')}</Link>
-        <Link href="/catalog" className={navClass(pathname !== '/' && pathname !== '/login')}>{t('nav.catalog')}</Link>
+        <Link href="/catalog" className={navClass(pathname !== '/' && pathname !== '/login' && pathname !== '/moderation')}>{t('nav.catalog')}</Link>
+        {(session?.user.role === 'moderator' || session?.user.role === 'admin') && (
+          <Link href="/moderation" className={navClass(pathname === '/moderation')}>{t('nav.moderation')}</Link>
+        )}
       </nav>
       <div className="spacer" />
       <div className="lang" role="group" aria-label={t('header.lang')}>

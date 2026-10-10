@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Crumbs } from '@/components/Crumbs';
 import { DescriptionPhotos } from '@/components/DescriptionPhotos';
 import { Documents } from '@/components/Documents';
+import { RouteEditLinks } from '@/components/edit/EditLinks';
 import { Grades } from '@/components/Grades';
 import { RouteFeaturesMap } from '@/components/RouteFeaturesMap';
 import { Disclaimer, LText, NoData } from '@/components/Text';
@@ -52,6 +53,7 @@ export default async function RoutePage({ params }: Props) {
           <h1 className="h1"><LText text={route.name} lang={lang} t={t} /></h1>
           <Grades grades={route.grades} emptyLabel={t('route.noGrade')} />
         </div>
+        <RouteEditLinks routeId={route.id} slug={route.slug} />
       </div>
       {route.status === 'draft' && <p className="status-note">{t('route.draft')}</p>}
       {route.status === 'hidden' && <p className="status-note">{t('route.hidden')}</p>}
