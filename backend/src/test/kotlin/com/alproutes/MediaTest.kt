@@ -191,6 +191,64 @@ class MediaTest : IntegrationTest() {
         assertTrue(summary["coverPhotoUrl"].asText().endsWith("/photos/$cover/thumbnail.jpg"))
     }
 
+    // -------------------------------------------------------------------- topo
+
+    @Test
+    fun `topo line versions are moderated like route revisions`() {
+        val mod = token(UserRole.MODERATOR)
+        val user = token()
+        val routeId = post("/routes", mod, mapOf("content" to content(createArea(mod)), "publish" to true)).expect(201).json["routeId"].asText()
+        val photoId = readyPhoto(user, routeId)
+        val versions = "/photos/$photoId/topo-lines/$routeId/versions"
+        fun drawing(x: Double = 0.2, dashed: Boolean = false) = mapOf(
+            "formatVersion" to 1,
+            "paths" to listOf(mapOf("id" to "p1", "style" to "main", "dashed" to dashed,
+                "points" to listOf(mapOf("x" to x, "y" to 0.9), mapOf("x" to 0.5, "y" to 0.5), mapOf("x" to 0.6, "y" to 0.1)))),
+            "labels" to listOf(mapOf("x" to 0.5, "y" to 0.5, "text" to "Ключ (тест)", "pathId" to "p1")),
+        )
+
+        // Only a topo photo takes a drawing; the author switches the type.
+        post(versions, user, mapOf("drawing" to drawing())).expect(409)
+        patch("/photos/$photoId", user, mapOf("kind" to "topo")).expect(200)
+
+        val bad = post(versions, user, mapOf("drawing" to drawing(x = 1.5))).expect(400)
+        assertEquals("drawing.paths[0].points[0]", bad.json["errors"][0]["field"].asText())
+        post(versions, user, mapOf("drawing" to drawing(), "publish" to true)).expect(403)
+
+        val v1 = post(versions, user, mapOf("drawing" to drawing(dashed = true))).expect(201).json
+        assertEquals(1, v1["version"].asInt())
+        assertEquals("pending", v1["status"].asText())
+        assertTrue(v1["drawing"]["paths"][0]["dashed"].asBoolean())
+        assertTrue(v1["drawing"]["paths"][0]["smooth"].asBoolean())
+
+        // A second first version is a conflict: the base is now v1.
+        val stale = post(versions, user, mapOf("drawing" to drawing())).expect(409)
+        assertEquals(v1["id"].asText(), stale.json["currentRevisionId"].asText())
+
+        assertEquals(0, get(versions).expect(200).json["items"].size())
+        assertEquals(1, get(versions, user).expect(200).json["items"].size())
+        assertEquals(1, get("/moderation/topo-lines", mod).expect(200).json["items"].count { it["id"] == v1["id"] })
+        get("/moderation/topo-lines", user).expect(403)
+
+        post("/topo-lines/${v1["id"].asText()}/approve", user).expect(403)
+        post("/topo-lines/${v1["id"].asText()}/approve", mod).expect(200)
+        val shown = get("/photos/$photoId").expect(200).json["topoLines"]
+        assertEquals(listOf(v1["id"].asText()), shown.map { it["id"].asText() })
+        assertEquals("Ключ (тест)", shown[0]["drawing"]["labels"][0]["text"].asText())
+
+        // v2 by the user waits; a moderator publishes v3 on the same base, so v2 becomes stale.
+        val v2 = post(versions, user, mapOf("baseVersionId" to v1["id"], "drawing" to drawing(x = 0.3))).expect(201).json
+        val v3 = post(versions, mod, mapOf("baseVersionId" to v1["id"], "drawing" to drawing(x = 0.4), "publish" to true)).expect(201).json
+        assertTrue(v3["isCurrent"].asBoolean())
+        val staleApprove = post("/topo-lines/${v2["id"].asText()}/approve", mod).expect(409)
+        assertEquals("revision-stale", staleApprove.json["type"].asText())
+        post("/topo-lines/${v2["id"].asText()}/reject", mod, mapOf<String, Any>()).expect(400)
+        assertEquals("rejected", post("/topo-lines/${v2["id"].asText()}/reject", mod, mapOf("note" to "тест")).expect(200).json["status"].asText())
+
+        assertEquals(listOf(3, 1), get(versions).expect(200).json["items"].map { it["version"].asInt() })
+        assertEquals(listOf(v3["id"].asText()), get("/photos/$photoId").expect(200).json["topoLines"].map { it["id"].asText() })
+    }
+
     // --------------------------------------------------------------- documents
 
     @Test

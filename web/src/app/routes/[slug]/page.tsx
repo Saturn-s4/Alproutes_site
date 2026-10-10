@@ -75,7 +75,7 @@ export default async function RoutePage({ params }: Props) {
               <p className="muted">{t('route.noDescription')}</p>
             )}
           </section>
-          <DescriptionPhotos photos={route.descriptionPhotos} refs={route.photos ?? []} />
+          <DescriptionPhotos photos={route.descriptionPhotos} refs={route.photos ?? []} routeId={route.id} />
 
           <section className="route-section">
             <h2 className="h2">{t('trk.title')} · <span className="mono">{tracks.data.items.length}</span></h2>

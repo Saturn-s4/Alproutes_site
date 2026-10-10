@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { api, publicApi } from '@/lib/api/browser';
 import type { Photo } from '@/lib/api/types';
 import { formatDate, photoKindLabel } from '@/lib/i18n';
+import { PhotoTopo } from './DescriptionPhotos';
 import { Lightbox, type LightboxItem } from './Lightbox';
 import { PhotoUpload } from './PhotoUpload';
 import { usePrefs } from './Prefs';
@@ -78,8 +79,9 @@ export function UserPhotos({ routeId, initial, nextCursor }: { routeId: string; 
           {ready.map(({ photo, caption }, i) => (
             // User captions are not translated (contract): shown as written.
             <figure key={photo.id}>
-              <button type="button" onClick={() => setOpen(i)} aria-label={caption ?? photo.author.displayName}>
+              <button type="button" className="topo-wrap" onClick={() => setOpen(i)} aria-label={caption ?? photo.author.displayName}>
                 <img src={photo.urls?.thumbnail} alt={caption ?? ''} loading="lazy" />
+                <PhotoTopo photo={photo} routeId={routeId} strokeWidth={2} />
               </button>
               <figcaption>
                 {caption && <span className="cap">{caption}</span>}
@@ -103,7 +105,7 @@ export function UserPhotos({ routeId, initial, nextCursor }: { routeId: string; 
       {session ? <PhotoUpload routeId={routeId} onAdded={added} /> : session === null && (
         <p className="muted"><a href="/login">{t('header.signIn')}</a> — {t('ph.signInToUpload')}</p>
       )}
-      <Lightbox items={ready} index={open} onIndex={setOpen} />
+      <Lightbox items={ready} index={open} onIndex={setOpen} routeId={routeId} />
     </>
   );
 }
