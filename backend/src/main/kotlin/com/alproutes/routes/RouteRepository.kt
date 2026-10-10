@@ -101,9 +101,24 @@ class RouteRepository(private val jdbc: NamedParameterJdbcTemplate, private val 
         }.groupBy({ it.first }, { it.second })
     }
 
+    fun photosOf(revisionIds: Collection<UUID>): Map<UUID, List<RouteContentPhoto>> {
+        if (revisionIds.isEmpty()) return emptyMap()
+        return jdbc.query(
+            """
+            SELECT revision_id, photo_id, caption::text AS caption
+              FROM route_revision_photos
+             WHERE revision_id IN (:ids)
+             ORDER BY revision_id, position
+            """.trimIndent(),
+            params { uuids("ids", revisionIds) },
+        ) { rs, _ -> rs.uuid("revision_id") to RouteContentPhoto(rs.uuid("photo_id"), mapper.localized(rs.getString("caption"))) }
+            .groupBy({ it.first }, { it.second })
+    }
+
     fun attachChildren(revisionId: UUID, base: RouteContent): RouteContent = base.copy(
         grades = gradesOf(listOf(revisionId))[revisionId].orEmpty(),
         features = featuresOf(listOf(revisionId))[revisionId].orEmpty(),
+        photos = photosOf(listOf(revisionId))[revisionId].orEmpty(),
     )
 
     private val revisionSummaryColumns = """
@@ -300,9 +315,21 @@ class RouteRepository(private val jdbc: NamedParameterJdbcTemplate, private val 
                 )
             }
         }
+        content.photos.forEachIndexed { position, ph ->
+            jdbc.update(
+                """
+                INSERT INTO route_revision_photos (revision_id, position, photo_id, caption)
+                VALUES (:rev, :pos, :photo, CAST(:caption AS jsonb))
+                """.trimIndent(),
+                params {
+                    uuid("rev", id); int("pos", position); uuid("photo", ph.photoId)
+                    str("caption", ph.caption?.let { mapper.writeValueAsString(it) })
+                },
+            )
+        }
     }
 
-    /** Copies grades and features of [fromRevision] into the pending [toRevision] (used by revert). */
+    /** Copies grades, features and description photos of [fromRevision] into the pending [toRevision] (used by revert). */
     fun copyRevision(fromRevision: UUID, toRevision: UUID, routeId: UUID, number: Int, baseRevisionId: UUID?, authorId: UUID, summary: String) {
         jdbc.update(
             """
@@ -332,6 +359,13 @@ class RouteRepository(private val jdbc: NamedParameterJdbcTemplate, private val 
             INSERT INTO route_revision_features (revision_id, position, kind, geometry, elevation_m, note, source_track_id)
             SELECT :to, position, kind, geometry, elevation_m, note, source_track_id
               FROM route_revision_features WHERE revision_id = :from
+            """.trimIndent(),
+            params { uuid("to", toRevision); uuid("from", fromRevision) },
+        )
+        jdbc.update(
+            """
+            INSERT INTO route_revision_photos (revision_id, position, photo_id, caption)
+            SELECT :to, position, photo_id, caption FROM route_revision_photos WHERE revision_id = :from
             """.trimIndent(),
             params { uuid("to", toRevision); uuid("from", fromRevision) },
         )

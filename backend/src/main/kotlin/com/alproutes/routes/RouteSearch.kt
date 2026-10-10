@@ -15,8 +15,10 @@ import com.alproutes.common.localized
 import com.alproutes.common.odt
 import com.alproutes.common.toPage
 import com.alproutes.common.uuid
+import com.alproutes.common.uuidOrNull
 import com.alproutes.common.wireOf
 import com.alproutes.grades.GradeRepository
+import com.alproutes.photos.PhotoRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -50,6 +52,7 @@ class RouteSearch(
     private val jdbc: NamedParameterJdbcTemplate,
     private val grades: GradeRepository,
     private val routes: RouteRepository,
+    private val photos: PhotoRepository,
     private val mapper: ObjectMapper,
 ) {
     private data class SortSpec(val expr: String, val sqlType: String, val descending: Boolean)
@@ -152,6 +155,10 @@ class RouteSearch(
                        rv.id AS revision_id, rv.name::text AS name, rv.route_type, rv.elevation_gain_m, rv.length_m,
                        a.id AS area_id, a.slug AS area_slug, a.type AS area_type, a.name::text AS area_name,
                        ST_AsGeoJSON(g.anchor_point) AS anchor,
+                       (SELECT p.id FROM route_revision_photos rp JOIN photos p ON p.id = rp.photo_id
+                         WHERE rp.revision_id = rv.id AND p.deleted_at IS NULL AND p.visibility = 'visible'
+                           AND p.processing_status = 'ready'
+                         ORDER BY rp.position LIMIT 1) AS cover_photo_id,
                        ${distanceExpr ?: "CAST(NULL AS float8)"} AS distance_m,
                        ${spec.expr} AS sort_key,
                        (${spec.expr})::text AS sort_key_text
@@ -182,7 +189,7 @@ class RouteSearch(
                     lengthM = rs.intOrNull("length_m"),
                     anchorPoint = mapper.geo(rs.getString("anchor")),
                     distanceM = rs.doubleOrNull("distance_m"),
-                    coverPhotoUrl = null,   // photos arrive with step 4
+                    coverPhotoUrl = rs.uuidOrNull("cover_photo_id")?.let { photos.urls(it).thumbnail },
                     updatedAt = rs.odt("updated_at"),
                 ),
                 rs.uuid("revision_id"),

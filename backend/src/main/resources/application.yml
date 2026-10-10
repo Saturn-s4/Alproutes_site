@@ -46,3 +46,6 @@ alproutes:
     secret-key: ${S3_SECRET_KEY:alproutes-secret}
     path-style: true
     upload-url-ttl: 15m
+    public-bucket: ${S3_PUBLIC_BUCKET:alproutes-public}
+    public-base-url: ${S3_PUBLIC_BASE_URL:http://localhost:9000/alproutes-public}
+    download-url-ttl: 10m

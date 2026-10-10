@@ -4,6 +4,10 @@
       "name": "alproutes",
       "credentials": [{ "accessKey": "alproutes", "secretKey": "alproutes-secret" }],
       "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    },
+    {
+      "name": "anonymous",
+      "actions": ["Read:alproutes-public"]
     }
   ]
 }

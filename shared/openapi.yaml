@@ -677,9 +677,17 @@ paths:
       tags: [photos]
       operationId: listRoutePhotos
       summary: Фото маршрута (вместе с текущими прорисовками)
+      description: |
+        Все фото маршрута, новые сверху. `inDescription` делит их по текущей опубликованной
+        ревизии: `true` — фото, включённые в описание (`RouteContent.photos`), `false` — остальные
+        (галерея участников). Без параметра — все. Чужие фото в обработке и неудачные не возвращаются;
+        свои автор видит в любом статусе.
       security: [{}, { bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/PhotoKind'
+        - name: inDescription
+          in: query
+          schema: { type: boolean }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1617,7 +1625,7 @@ components:
       description: |
         RFC 9457. Значения `type`: `validation-error`, `unauthorized`, `forbidden`, `not-found`,
         `conflict`, `slug-taken`, `revision-conflict`, `revision-stale`, `invalid-state`,
-        `track-not-contiguous`, `payload-too-large`, `internal-error`.
+        `track-not-contiguous`, `payload-too-large`, `rights-unclear`, `internal-error`.
       required: [type, title, status]
       properties:
         type: { type: string, description: 'Машиночитаемый код, например `revision-conflict`' }
@@ -1953,6 +1961,25 @@ components:
             Порядок элементов сохраняется: это порядок отрисовки.
           maxItems: 50
           items: { $ref: '#/components/schemas/RouteFeature' }
+        photos:
+          type: array
+          description: |
+            Фото, входящие в само описание, в порядке показа. Версионируются вместе с ревизией:
+            правка набора фото — это новая ревизия, откат возвращает прежний набор.
+            Фото должно быть заранее загружено к этому же маршруту (`POST /routes/{routeId}/photos`),
+            поэтому у нового маршрута список пуст. Удалённые или скрытые потом фото остаются
+            в ревизии, но клиентам не показываются (см. `RouteDetail.descriptionPhotos`).
+          maxItems: 30
+          items: { $ref: '#/components/schemas/RouteContentPhoto' }
+    RouteContentPhoto:
+      type: object
+      required: [photoId]
+      properties:
+        photoId: { type: string, format: uuid }
+        caption:
+          allOf:
+            - $ref: '#/components/schemas/LocalizedText'
+          description: Подпись в описании (переводимая, в отличие от `Photo.caption` автора)
     RouteFeatureKind:
       type: string
       enum: [start, summit, bivouac, descent_start, route_line, approach, descent]
@@ -2003,7 +2030,11 @@ components:
           type: number
           nullable: true
           description: Только при поиске с `near` — расстояние по geography
-        coverPhotoUrl: { type: string, format: uri, nullable: true }
+        coverPhotoUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Миниатюра первого готового фото описания текущей ревизии
         updatedAt: { type: string, format: date-time }
     AnchorPoint:
       allOf:
@@ -2015,7 +2046,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/RouteContent'
         - type: object
-          required: [id, slug, status, area, areaPath, currentRevision, updatedAt]
+          required: [id, slug, status, area, areaPath, currentRevision, descriptionPhotos, updatedAt]
           properties:
             id: { type: string, format: uuid }
             slug: { $ref: '#/components/schemas/Slug' }
@@ -2026,6 +2057,12 @@ components:
               description: Хлебные крошки от корня к району маршрута
               items: { $ref: '#/components/schemas/AreaRef' }
             currentRevision: { $ref: '#/components/schemas/RouteRevisionRef' }
+            descriptionPhotos:
+              type: array
+              description: |
+                Фото из `photos` текущей ревизии в том же порядке — только готовые и не скрытые.
+                Подпись в описании берётся из соответствующего элемента `photos` по `photoId`.
+              items: { $ref: '#/components/schemas/Photo' }
             stats: { $ref: '#/components/schemas/RouteStats' }
             updatedAt: { type: string, format: date-time }
     RouteStats:

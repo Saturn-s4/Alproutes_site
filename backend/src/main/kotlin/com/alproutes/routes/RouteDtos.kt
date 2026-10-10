@@ -7,6 +7,7 @@ import com.alproutes.common.GeoJsonPoint
 import com.alproutes.common.LocalizedText
 import com.alproutes.common.Wire
 import com.alproutes.grades.Grade
+import com.alproutes.photos.Photo
 import com.alproutes.users.UserPublic
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonUnwrapped
@@ -42,6 +43,12 @@ data class RouteFeature(
     val sourceTrackId: UUID? = null,
 )
 
+/** A photo shown in the description itself (contract: RouteContentPhoto). */
+data class RouteContentPhoto(
+    val photoId: UUID,
+    val caption: LocalizedText? = null,
+)
+
 /**
  * Full snapshot of a route description = one revision (contract: RouteContent).
  * Every factual field may be null: "no data", never a guess.
@@ -61,6 +68,7 @@ data class RouteContent(
     val firstAscentYear: Int? = null,
     val dataSources: String? = null,
     val features: List<RouteFeature> = emptyList(),
+    val photos: List<RouteContentPhoto> = emptyList(),
 )
 
 data class RouteCreate(
@@ -98,6 +106,7 @@ data class RouteDetail(
     val area: AreaRef,
     val areaPath: List<AreaRef>,
     val currentRevision: RouteRevisionRef,
+    val descriptionPhotos: List<Photo>,
     val stats: RouteStats,
     val updatedAt: OffsetDateTime,
 )

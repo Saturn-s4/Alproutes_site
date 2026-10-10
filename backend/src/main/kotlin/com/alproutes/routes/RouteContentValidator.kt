@@ -61,6 +61,7 @@ class RouteContentValidator(
 
         v.check(content.features.size <= 50, "$prefix.features", "Не больше 50 объектов")
         content.features.forEachIndexed { i, f -> feature(v, f, "$prefix.features[$i]", routeId) }
+        photos(v, content.photos, "$prefix.photos", routeId)
         v.throwIfAny()
 
         // Checks whose failure is not a field format problem (409/400 with their own type).
@@ -85,6 +86,29 @@ class RouteContentValidator(
             }
         }
         v.localized(f.note, "$field.note", required = false, maxLength = 1000)
+    }
+
+    private fun photos(v: Validator, photos: List<RouteContentPhoto>, field: String, routeId: UUID?) {
+        if (photos.isEmpty()) return
+        if (routeId == null) {
+            v.error(field, "Фото добавляются в описание после создания маршрута: сначала их нужно загрузить к нему")
+            return
+        }
+        v.check(photos.size <= 30, field, "Не больше 30 фото в описании")
+        val known = jdbc.query(
+            "SELECT id, processing_status FROM photos WHERE id IN (:ids) AND route_id = :route AND deleted_at IS NULL",
+            params { uuids("ids", photos.map { it.photoId }); uuid("route", routeId) },
+        ) { rs, _ -> rs.uuid("id") to rs.getString("processing_status") }.toMap()
+        val seen = mutableSetOf<UUID>()
+        photos.forEachIndexed { i, ph ->
+            val f = "$field[$i]"
+            if (!seen.add(ph.photoId)) v.error("$f.photoId", "Фото указано дважды")
+            when (known[ph.photoId]) {
+                null -> v.error("$f.photoId", "Фото этого маршрута не найдено")
+                "failed" -> v.error("$f.photoId", "Фото не удалось обработать")
+            }
+            v.localized(ph.caption, "$f.caption", required = false, maxLength = 1000)
+        }
     }
 
     private fun checkTrackImport(trackId: UUID, routeId: UUID, field: String) {

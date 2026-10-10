@@ -36,7 +36,9 @@ services:
       - seaweedfs-data:/data
       - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
 
-  # Creates the bucket once SeaweedFS is up.
+  # Creates the buckets once SeaweedFS is up:
+  #   alproutes-media  — private: user uploads as is (originals keep EXIF, incl. GPS);
+  #   alproutes-public — anonymous read (see seaweedfs/s3.json): EXIF-stripped photo derivatives.
   s3-init:
     image: chrislusf/seaweedfs:4.47
     depends_on:
@@ -45,6 +47,7 @@ services:
       /bin/sh -c "
       until wget -q -O /dev/null http://seaweedfs:8888/; do sleep 1; done;
       echo 's3.bucket.create -name alproutes-media' | weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888;
+      echo 's3.bucket.create -name alproutes-public' | weed shell -master=seaweedfs:9333 -filer=seaweedfs:8888;
       "
 
   # Not started by `up`: run explicitly (see header). The backend will also run

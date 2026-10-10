@@ -29,5 +29,11 @@ data class AppProperties(
         val secretKey: String,
         val pathStyle: Boolean = true,
         val uploadUrlTtl: Duration = Duration.ofMinutes(15),
+        /** Anonymous-read bucket for EXIF-stripped photo derivatives. */
+        val publicBucket: String,
+        /** Base URL of [publicBucket] as seen by clients (a CDN in production). */
+        val publicBaseUrl: String,
+        /** Lifetime of pre-signed download links (documents). */
+        val downloadUrlTtl: Duration = Duration.ofMinutes(10),
     )
 }

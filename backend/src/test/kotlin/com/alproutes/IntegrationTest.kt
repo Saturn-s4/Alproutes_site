@@ -19,8 +19,12 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.MvcResult
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+import org.springframework.test.context.DynamicPropertyRegistrar
+import org.testcontainers.containers.GenericContainer
 import org.testcontainers.containers.PostgreSQLContainer
+import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.utility.DockerImageName
+import org.testcontainers.utility.MountableFile
 import java.util.UUID
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -31,6 +35,24 @@ class TestcontainersConfig {
     @ServiceConnection
     fun postgres(): PostgreSQLContainer<*> =
         PostgreSQLContainer<Nothing>(DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres"))
+
+    /** Same S3 server and access config as local development (infra/docker-compose.yml). */
+    @Bean
+    fun seaweedfs(): GenericContainer<*> =
+        GenericContainer<Nothing>(DockerImageName.parse("chrislusf/seaweedfs:4.47")).apply {
+            withCommand("server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json")
+            withCopyFileToContainer(MountableFile.forHostPath("../infra/seaweedfs/s3.json"), "/etc/seaweedfs/s3.json")
+            withExposedPorts(8333)
+            waitingFor(Wait.forListeningPorts(8333))
+        }
+
+    @Bean
+    fun s3Properties(seaweedfs: GenericContainer<*>) = DynamicPropertyRegistrar { registry ->
+        val url = { "http://${seaweedfs.host}:${seaweedfs.getMappedPort(8333)}" }
+        registry.add("alproutes.s3.endpoint", url)
+        registry.add("alproutes.s3.public-endpoint", url)
+        registry.add("alproutes.s3.public-base-url") { url() + "/alproutes-public" }
+    }
 }
 
 @SpringBootTest(properties = ["alproutes.auth.jwt-secret=test-secret-0123456789abcdef0123456789"])
@@ -53,6 +75,8 @@ abstract class IntegrationTest {
     fun get(path: String, token: String? = null): Response = call(MockMvcRequestBuilders.get(path), token, null)
     fun post(path: String, token: String?, body: Any? = null): Response = call(MockMvcRequestBuilders.post(path), token, body)
     fun patch(path: String, token: String?, body: Any): Response = call(MockMvcRequestBuilders.patch(path), token, body)
+    fun put(path: String, token: String?, body: Any): Response = call(MockMvcRequestBuilders.put(path), token, body)
+    fun delete(path: String, token: String?): Response = call(MockMvcRequestBuilders.delete(path), token, null)
 
     private fun call(builder: MockHttpServletRequestBuilder, token: String?, body: Any?): Response {
         token?.let { builder.header("Authorization", "Bearer $it") }

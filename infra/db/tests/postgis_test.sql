@@ -1,5 +1,6 @@
 -- PostGIS-specific checks: geometry types, SRID, validity, geo queries.
 -- Requires a real PostGIS database (docker compose). Rolled back at the end.
+-- Assertions filter by the test route: the dev database may hold other routes.
 --
 --   psql -v ON_ERROR_STOP=1 -f infra/db/tests/postgis_test.sql
 \set ON_ERROR_STOP 1
@@ -64,7 +65,7 @@ UPDATE route_revisions
  WHERE id = '30000000-0000-0000-0000-000000000001';
 
 DO $$ BEGIN
-    IF NOT (SELECT ST_Equals(anchor_point, ST_SetSRID(ST_MakePoint(43.0, 43.0), 4326)) FROM route_geo) THEN
+    IF NOT (SELECT ST_Equals(anchor_point, ST_SetSRID(ST_MakePoint(43.0, 43.0), 4326)) FROM route_geo WHERE route_id = '20000000-0000-0000-0000-000000000001') THEN
         RAISE EXCEPTION 'FAIL anchor is not the start point';
     END IF;
     RAISE NOTICE 'OK   anchor = start point';
@@ -73,7 +74,8 @@ END $$;
 -- bbox search on all features: a view window that contains only the approach still finds the route
 DO $$ BEGIN
     IF (SELECT count(*) FROM route_geo
-        WHERE geometry && ST_MakeEnvelope(42.94, 42.94, 42.96, 42.96, 4326)
+        WHERE route_id = '20000000-0000-0000-0000-000000000001'
+          AND geometry && ST_MakeEnvelope(42.94, 42.94, 42.96, 42.96, 4326)
           AND ST_Intersects(geometry, ST_MakeEnvelope(42.94, 42.94, 42.96, 42.96, 4326))) <> 1
     THEN RAISE EXCEPTION 'FAIL bbox search over features'; END IF;
     RAISE NOTICE 'OK   bbox search over features';
@@ -82,9 +84,9 @@ END $$;
 -- radius search in metres via geography (~1.1 km away: inside 2 km, outside 500 m)
 DO $$ BEGIN
     IF (SELECT count(*) FROM route_geo
-        WHERE ST_DWithin(anchor_point::geography, ST_SetSRID(ST_MakePoint(43.0, 43.01), 4326)::geography, 2000)) <> 1
+        WHERE route_id = '20000000-0000-0000-0000-000000000001' AND ST_DWithin(anchor_point::geography, ST_SetSRID(ST_MakePoint(43.0, 43.01), 4326)::geography, 2000)) <> 1
     OR (SELECT count(*) FROM route_geo
-        WHERE ST_DWithin(anchor_point::geography, ST_SetSRID(ST_MakePoint(43.0, 43.01), 4326)::geography, 500)) <> 0
+        WHERE route_id = '20000000-0000-0000-0000-000000000001' AND ST_DWithin(anchor_point::geography, ST_SetSRID(ST_MakePoint(43.0, 43.01), 4326)::geography, 500)) <> 0
     THEN RAISE EXCEPTION 'FAIL radius search'; END IF;
     RAISE NOTICE 'OK   radius search';
 END $$;

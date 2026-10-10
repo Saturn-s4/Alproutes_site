@@ -42,6 +42,10 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("software.amazon.awssdk:s3")
+    // Photo processing: EXIF orientation, capture time and GPS. ImageIO cannot read EXIF.
+    implementation("com.drewnoakes:metadata-extractor:2.19.0")
+    // WebP decoding for ImageIO (the JDK reads only JPEG, PNG, GIF, BMP).
+    implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
