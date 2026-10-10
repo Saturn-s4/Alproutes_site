@@ -20,6 +20,7 @@ import com.alproutes.common.uuid
 import com.alproutes.common.validate
 import com.alproutes.common.wireOf
 import com.alproutes.moderation.ModerationLog
+import com.alproutes.photos.PhotoRepository
 import com.alproutes.users.UserRepository
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -34,6 +35,7 @@ class RouteService(
     private val areas: AreaRepository,
     private val users: UserRepository,
     private val log: ModerationLog,
+    private val photos: PhotoRepository,
     private val jdbc: NamedParameterJdbcTemplate,
     private val mapper: ObjectMapper,
 ) {
@@ -175,14 +177,16 @@ class RouteService(
         }.firstOrNull() ?: throw notFound("Маршрут не найден")   // draft: nothing published yet
         if (row.status == ContentStatus.HIDDEN && caller?.isModerator != true) throw notFound("Маршрут не найден")
 
+        val content = routes.attachChildren(row.revision.id, row.content)
         return RouteDetail(
-            content = routes.attachChildren(row.revision.id, row.content),
+            content = content,
             id = row.id,
             slug = row.slug,
             status = row.status,
             area = row.area,
             areaPath = areas.ancestors(row.area.id, includeSelf = true),
             currentRevision = row.revision,
+            descriptionPhotos = photos.publicByIds(content.photos.map { it.photoId }),
             stats = stats(row.id),
             updatedAt = row.updatedAt,
         )

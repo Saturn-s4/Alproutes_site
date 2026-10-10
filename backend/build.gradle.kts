@@ -12,6 +12,8 @@ version = "0.1.0"
 
 // Spring Boot's BOM pins Kotlin to its own baseline; keep stdlib in sync with the plugin.
 extra["kotlin.version"] = "2.1.21"
+// Testcontainers 1.21.3 (Boot 3.5.6 default) uses a Docker API version that Docker Engine 29+ rejects.
+extra["testcontainers.version"] = "1.21.4"
 
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
@@ -40,6 +42,10 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("software.amazon.awssdk:s3")
+    // Photo processing: EXIF orientation, capture time and GPS. ImageIO cannot read EXIF.
+    implementation("com.drewnoakes:metadata-extractor:2.19.0")
+    // WebP decoding for ImageIO (the JDK reads only JPEG, PNG, GIF, BMP).
+    implementation("com.twelvemonkeys.imageio:imageio-webp:3.12.0")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")

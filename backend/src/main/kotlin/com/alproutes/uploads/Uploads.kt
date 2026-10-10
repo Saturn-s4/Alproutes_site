@@ -4,7 +4,11 @@ import com.alproutes.auth.Caller
 import com.alproutes.common.ApiException
 import com.alproutes.common.params
 import com.alproutes.common.validate
+import com.alproutes.common.conflict
+import com.alproutes.common.fieldError
+import com.alproutes.common.uuid
 import com.alproutes.config.AppProperties
+import com.alproutes.media.MediaStorage
 import com.alproutes.users.UserRepository
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -30,6 +34,9 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 data class UploadRequest(val purpose: String, val contentType: String, val sizeBytes: Long, val fileName: String? = null)
+
+/** An upload taken over by an entity (photo, track, document). */
+data class ClaimedUpload(val id: UUID, val storageKey: String, val contentType: String, val sizeBytes: Long, val fileName: String?)
 
 data class UploadSlot(
     val uploadId: UUID,
@@ -71,6 +78,7 @@ class UploadService(
     private val props: AppProperties,
     private val jdbc: NamedParameterJdbcTemplate,
     private val users: UserRepository,
+    private val storage: MediaStorage,
 ) {
     @Transactional
     fun create(caller: Caller, req: UploadRequest): UploadSlot {
@@ -107,12 +115,14 @@ class UploadService(
 
         jdbc.update(
             """
-            INSERT INTO uploads (id, user_id, purpose, storage_key, content_type, size_bytes, expires_at)
-            VALUES (:id, :user, :purpose, :key, :ct, :size, CAST(:expires AS timestamptz))
+            INSERT INTO uploads (id, user_id, purpose, storage_key, content_type, size_bytes, expires_at, file_name)
+            VALUES (:id, :user, :purpose, :key, :ct, :size, CAST(:expires AS timestamptz), CAST(:fileName AS text))
             """.trimIndent(),
             params {
                 uuid("id", id); uuid("user", caller.userId); str("purpose", req.purpose); str("key", key)
                 str("ct", req.contentType); long("size", req.sizeBytes); str("expires", expires.toString())
+                // Keep only the base name: some browsers send a full local path.
+                str("fileName", req.fileName?.split('/', '\\')?.last()?.takeIf { it.isNotBlank() })
             },
         )
 
@@ -123,6 +133,39 @@ class UploadService(
 
         return UploadSlot(id, presigned.url().toString(), "PUT", headers, expires.atOffset(ZoneOffset.UTC))
     }
+
+    /**
+     * Marks the caller's upload as used by a new entity. The file must actually be in storage with
+     * the declared size: the pre-signed URL only allowed the upload, it does not prove it happened.
+     * Expiry is not checked here: an offline client may create the entity long after uploading,
+     * and an expired upload is garbage-collected only while unclaimed.
+     */
+    @Transactional
+    fun claim(caller: Caller, uploadId: UUID, purpose: String, field: String = "uploadId"): ClaimedUpload {
+        val row = jdbc.query(
+            """
+            SELECT id, user_id, purpose, storage_key, content_type, size_bytes, file_name, claimed_at IS NOT NULL AS claimed
+              FROM uploads WHERE id = :id FOR UPDATE
+            """.trimIndent(),
+            params { uuid("id", uploadId) },
+        ) { rs, _ ->
+            UploadRow(rs.uuid("user_id"), rs.getString("purpose"), rs.getString("storage_key"),
+                rs.getString("content_type"), rs.getLong("size_bytes"), rs.getBoolean("claimed"), rs.getString("file_name"))
+        }.firstOrNull()
+        if (row == null || row.userId != caller.userId) throw fieldError(field, "Загрузка не найдена")
+        if (row.purpose != purpose) throw fieldError(field, "Загрузка предназначена для «${row.purpose}», а не для «$purpose»")
+        if (row.claimed) throw conflict("conflict", "Этот файл уже использован")
+        val actual = storage.sizeOf(row.storageKey)
+            ?: throw conflict("invalid-state", "Файл ещё не загружен в хранилище")
+        if (actual != row.sizeBytes) throw conflict("invalid-state", "Размер файла не совпадает с заявленным")
+        jdbc.update("UPDATE uploads SET claimed_at = now() WHERE id = :id", params { uuid("id", uploadId) })
+        return ClaimedUpload(uploadId, row.storageKey, row.contentType, row.sizeBytes, row.fileName)
+    }
+
+    private data class UploadRow(
+        val userId: UUID, val purpose: String, val storageKey: String, val contentType: String, val sizeBytes: Long, val claimed: Boolean,
+        val fileName: String?,
+    )
 }
 
 @RestController

@@ -1,0 +1,29 @@
+{
+  "name": "alproutes-web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "gen:api": "openapi-typescript ../shared/openapi.yaml -o src/lib/api/schema.d.ts",
+    "predev": "npm run gen:api && npm run prepare:assets",
+    "dev": "next dev",
+    "prebuild": "npm run gen:api && npm run prepare:assets",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "npm run gen:api && tsc --noEmit",
+    "prepare:assets": "node scripts/copy-maplibre-worker.mjs"
+  },
+  "dependencies": {
+    "maplibre-gl": "6.13.0",
+    "next": "16.4.0",
+    "openapi-fetch": "0.17.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "5.9"
+  }
+}

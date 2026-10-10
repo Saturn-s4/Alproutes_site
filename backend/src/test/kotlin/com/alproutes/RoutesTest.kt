@@ -144,4 +144,46 @@ class RoutesTest : IntegrationTest() {
         assertEquals("$slug1-2", slug2)
         assertEquals(one["routeId"].asText(), get("/routes/by-slug/$slug1").expect(200).json["id"].asText())
     }
+
+    @Test
+    fun `catalogue filters by grade set and facets ignore their own filter`() {
+        val mod = token(UserRole.MODERATOR)
+        val root = createArea(mod, "Корень (тест)")
+        val childA = post("/areas", mod, mapOf("parentId" to root, "type" to "massif", "slug" to "a-${UUID.randomUUID().toString().take(8)}",
+            "name" to mapOf("ru" to "А (тест)"), "status" to "published")).expect(201).json["id"].asText()
+        val childB = post("/areas", mod, mapOf("parentId" to root, "type" to "massif", "slug" to "b-${UUID.randomUUID().toString().take(8)}",
+            "name" to mapOf("ru" to "Б (тест)"), "status" to "published")).expect(201).json["id"].asText()
+        // Test values only, not real routes.
+        fun route(area: String, grade: String?, gain: Int?): String = post("/routes", mod, mapOf(
+            "content" to content(UUID.fromString(area), grades = listOfNotNull(grade?.let { mapOf("system" to "RU", "value" to it) }),
+                extra = mapOf("elevationGainM" to gain)),
+            "publish" to true,
+        )).expect(201).json["routeId"].asText()
+        val r2a = route(childA, "2А", 900)
+        val r3b = route(childA, "3Б", null)
+        val r5a = route(childB, "5А", 1500)
+        val noGrade = route(childB, null, 300)
+
+        val inRoot = "areaId=$root"
+        assertEquals(setOf(r2a, r5a), ids(get("/routes?$inRoot&gradeSystem=RU&gradeValues=2А,5А").expect(200)).toSet())
+        get("/routes?$inRoot&gradeValues=2А").expect(400)                    // needs gradeSystem
+        get("/routes?$inRoot&gradeSystem=RU&gradeValues=2B").expect(400)     // Latin B is not a value
+
+        // Gain sort: biggest first, "no data" last.
+        assertEquals(listOf(r5a, r2a, noGrade, r3b), ids(get("/routes?$inRoot&sort=elevation_gain").expect(200)))
+        // Grade sort: by difficulty within RU, routes without an RU grade last (not dropped).
+        assertEquals(listOf(r2a, r3b, r5a, noGrade), ids(get("/routes?$inRoot&gradeSystem=RU&sort=grade").expect(200)))
+
+        val facets = get("/routes/facets?$inRoot&gradeSystem=RU&gradeValues=2А&areaParentId=$root").expect(200).json
+        assertEquals(1, facets["total"].asInt())
+        // Grade counts ignore the grade filter: every value of the root is counted.
+        val grades = facets["grades"].associate { "${it["system"].asText()} ${it["value"].asText()}" to it["count"].asInt() }
+        assertEquals(mapOf("RU 2А" to 1, "RU 3Б" to 1, "RU 5А" to 1), grades)
+        // Area counts ignore areaId but keep the grade filter.
+        val areas = facets["areas"].associate { it["area"]["id"].asText() to it["count"].asInt() }
+        assertEquals(mapOf(childA to 1, childB to 0), areas)
+        assertEquals(0, facets["materials"]["hasDocument"].asInt())
+        assertEquals(0, ids(get("/routes?$inRoot&hasDocument=true").expect(200)).size)
+        assertEquals(4, ids(get("/routes?$inRoot&hasDocument=false").expect(200)).size)
+    }
 }

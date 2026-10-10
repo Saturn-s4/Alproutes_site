@@ -381,8 +381,10 @@ paths:
         в нём виден только подход), `near` — по точке маркера (`anchorPoint`).
         Маршруты без геометрии в гео-выдачу не попадают.
         Фильтр по категории работает только внутри одной системы:
-        `gradeSystem=RU&gradeMin=4А&gradeMax=5Б`. Маршруты без категории в этой системе
-        в выдачу не попадают — клиент должен сообщать об этом пользователю.
+        `gradeSystem=RU&gradeMin=4А&gradeMax=5Б` или набором значений `gradeSystem=RU&gradeValues=2А,5А`.
+        Маршруты без категории в этой системе в выдачу не попадают — клиент должен сообщать об этом пользователю.
+        `hasTrack` / `hasDocument` учитывают только публичные материалы (готовые видимые треки,
+        документы с выясненным правовым статусом).
       security: [{}, { bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/Bbox'
@@ -415,12 +417,18 @@ paths:
         - name: routeType
           in: query
           schema: { $ref: '#/components/schemas/RouteType' }
+        - $ref: '#/components/parameters/GradeValues'
+        - $ref: '#/components/parameters/HasTrack'
+        - $ref: '#/components/parameters/HasDocument'
         - name: sort
           in: query
-          description: При `near` по умолчанию `distance`, при `q` — `relevance`, иначе `name`.
+          description: |
+            При `near` по умолчанию `distance`, при `q` — `relevance`, иначе `name`.
+            `grade` — по категории в `gradeSystem` (обязателен), маршруты без категории в этой системе в конце.
+            `elevation_gain` — по перепаду, от большего; маршруты без данных о перепаде в конце.
           schema:
             type: string
-            enum: [name, grade, updated, distance, relevance]
+            enum: [name, grade, updated, distance, relevance, elevation_gain]
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -449,6 +457,53 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /routes/facets:
+    get:
+      tags: [routes]
+      operationId: getRouteFacets
+      summary: Счётчики для фильтров каталога
+      description: |
+        Принимает те же фильтры, что `GET /routes`. Каждый счётчик считается так, будто его
+        собственного фильтра нет (категории — без `gradeValues/gradeMin/gradeMax`, районы — без `areaId`,
+        материалы — без `hasTrack/hasDocument`): так рядом с каждым вариантом видно, сколько маршрутов
+        он даст. `total` — с учётом всех фильтров.
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/Bbox'
+        - name: areaId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: includeSubareas
+          in: query
+          schema: { type: boolean, default: true }
+        - $ref: '#/components/parameters/SearchQuery'
+        - name: gradeSystem
+          in: query
+          schema: { $ref: '#/components/schemas/GradeSystemCode' }
+        - name: gradeMin
+          in: query
+          schema: { type: string }
+        - name: gradeMax
+          in: query
+          schema: { type: string }
+        - name: routeType
+          in: query
+          schema: { $ref: '#/components/schemas/RouteType' }
+        - $ref: '#/components/parameters/GradeValues'
+        - $ref: '#/components/parameters/HasTrack'
+        - $ref: '#/components/parameters/HasDocument'
+        - name: areaParentId
+          in: query
+          description: Чьих детей перечислить в счётчике районов. Без параметра — районы верхнего уровня.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RouteFacets' }
+        '400': { $ref: '#/components/responses/BadRequest' }
 
   /routes/map-points:
     get:
@@ -677,9 +732,17 @@ paths:
       tags: [photos]
       operationId: listRoutePhotos
       summary: Фото маршрута (вместе с текущими прорисовками)
+      description: |
+        Все фото маршрута, новые сверху. `inDescription` делит их по текущей опубликованной
+        ревизии: `true` — фото, включённые в описание (`RouteContent.photos`), `false` — остальные
+        (галерея участников). Без параметра — все. Чужие фото в обработке и неудачные не возвращаются;
+        свои автор видит в любом статусе.
       security: [{}, { bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/PhotoKind'
+        - name: inDescription
+          in: query
+          schema: { type: boolean }
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -1555,6 +1618,28 @@ components:
       required: true
       schema: { type: string, format: uuid }
 
+    GradeValues:
+      name: gradeValues
+      in: query
+      description: Значения категорий через запятую, внутри `gradeSystem` (обязателен). Совпадение с любым.
+      style: form
+      explode: false
+      schema:
+        type: array
+        maxItems: 30
+        items: { type: string }
+      example: [2А, 5А]
+    HasTrack:
+      name: hasTrack
+      in: query
+      description: '`true` — только с публичным GPX/KML-треком, `false` — только без.'
+      schema: { type: boolean }
+    HasDocument:
+      name: hasDocument
+      in: query
+      description: '`true` — только с опубликованным архивным PDF, `false` — только без.'
+      schema: { type: boolean }
+
   responses:
     BadRequest:
       description: Некорректный запрос
@@ -1617,7 +1702,7 @@ components:
       description: |
         RFC 9457. Значения `type`: `validation-error`, `unauthorized`, `forbidden`, `not-found`,
         `conflict`, `slug-taken`, `revision-conflict`, `revision-stale`, `invalid-state`,
-        `track-not-contiguous`, `payload-too-large`, `internal-error`.
+        `track-not-contiguous`, `payload-too-large`, `rights-unclear`, `internal-error`.
       required: [type, title, status]
       properties:
         type: { type: string, description: 'Машиночитаемый код, например `revision-conflict`' }
@@ -1953,6 +2038,25 @@ components:
             Порядок элементов сохраняется: это порядок отрисовки.
           maxItems: 50
           items: { $ref: '#/components/schemas/RouteFeature' }
+        photos:
+          type: array
+          description: |
+            Фото, входящие в само описание, в порядке показа. Версионируются вместе с ревизией:
+            правка набора фото — это новая ревизия, откат возвращает прежний набор.
+            Фото должно быть заранее загружено к этому же маршруту (`POST /routes/{routeId}/photos`),
+            поэтому у нового маршрута список пуст. Удалённые или скрытые потом фото остаются
+            в ревизии, но клиентам не показываются (см. `RouteDetail.descriptionPhotos`).
+          maxItems: 30
+          items: { $ref: '#/components/schemas/RouteContentPhoto' }
+    RouteContentPhoto:
+      type: object
+      required: [photoId]
+      properties:
+        photoId: { type: string, format: uuid }
+        caption:
+          allOf:
+            - $ref: '#/components/schemas/LocalizedText'
+          description: Подпись в описании (переводимая, в отличие от `Photo.caption` автора)
     RouteFeatureKind:
       type: string
       enum: [start, summit, bivouac, descent_start, route_line, approach, descent]
@@ -2003,7 +2107,11 @@ components:
           type: number
           nullable: true
           description: Только при поиске с `near` — расстояние по geography
-        coverPhotoUrl: { type: string, format: uri, nullable: true }
+        coverPhotoUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Миниатюра первого готового фото описания текущей ревизии
         updatedAt: { type: string, format: date-time }
     AnchorPoint:
       allOf:
@@ -2015,7 +2123,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/RouteContent'
         - type: object
-          required: [id, slug, status, area, areaPath, currentRevision, updatedAt]
+          required: [id, slug, status, area, areaPath, currentRevision, descriptionPhotos, updatedAt]
           properties:
             id: { type: string, format: uuid }
             slug: { $ref: '#/components/schemas/Slug' }
@@ -2026,6 +2134,12 @@ components:
               description: Хлебные крошки от корня к району маршрута
               items: { $ref: '#/components/schemas/AreaRef' }
             currentRevision: { $ref: '#/components/schemas/RouteRevisionRef' }
+            descriptionPhotos:
+              type: array
+              description: |
+                Фото из `photos` текущей ревизии в том же порядке — только готовые и не скрытые.
+                Подпись в описании берётся из соответствующего элемента `photos` по `photoId`.
+              items: { $ref: '#/components/schemas/Photo' }
             stats: { $ref: '#/components/schemas/RouteStats' }
             updatedAt: { type: string, format: date-time }
     RouteStats:
@@ -2044,6 +2158,38 @@ components:
           type: array
           items: { $ref: '#/components/schemas/RouteSummary' }
         nextCursor: { type: string, nullable: true }
+    RouteFacets:
+      type: object
+      required: [total, grades, areas, materials]
+      properties:
+        total: { type: integer, description: Маршрутов при всех текущих фильтрах }
+        grades:
+          type: array
+          description: |
+            Сколько маршрутов у каждого значения категории, по всем системам; нулевые не возвращаются.
+            Порядок — системы по справочнику, значения по возрастанию сложности.
+          items:
+            type: object
+            required: [system, value, count]
+            properties:
+              system: { $ref: '#/components/schemas/GradeSystemCode' }
+              value: { type: string }
+              count: { type: integer }
+        areas:
+          type: array
+          description: Дети `areaParentId` (или районы верхнего уровня), каждый вместе с вложенными; нули включены.
+          items:
+            type: object
+            required: [area, count]
+            properties:
+              area: { $ref: '#/components/schemas/AreaRef' }
+              count: { type: integer }
+        materials:
+          type: object
+          required: [hasTrack, hasDocument]
+          properties:
+            hasTrack: { type: integer }
+            hasDocument: { type: integer }
     RouteMapPoint:
       type: object
       required: [id, slug, name, anchorPoint, grades]
@@ -2356,6 +2502,7 @@ components:
           type: string
           nullable: true
           enum: [gps, barometric, dem, mixed]
+          description: null — неизвестен
         processingStatus: { $ref: '#/components/schemas/ProcessingStatus' }
         processingError: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
@@ -2388,7 +2535,9 @@ components:
       properties:
         source:
           type: string
+          nullable: true
           enum: [gps, barometric, dem, mixed]
+          description: null — источник высот неизвестен (по файлу GPX его не определить, а DEM-сверка не выполнялась)
         points:
           type: array
           description: '`[distanceM, elevationM]` по возрастанию дистанции, после сглаживания и прореживания'

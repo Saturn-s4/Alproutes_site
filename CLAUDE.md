@@ -25,7 +25,7 @@
 | Слой | Технология |
 |---|---|
 | БД | PostgreSQL 16 + PostGIS 3 |
-| Файлы | S3-совместимое хранилище (MinIO локально) |
+| Файлы | S3-совместимое хранилище (SeaweedFS локально) |
 | Backend | Kotlin + Spring Boot, REST + OpenAPI |
 | Auth | JWT (access + refresh), OAuth через Google/Apple |
 | Android | Kotlin, Jetpack Compose, MVI, Room, Ktor Client, WorkManager, Coil |
@@ -114,8 +114,15 @@
 
 - [x] **Шаг 1** — схема БД и OpenAPI-контракт
 - [ ] **Шаг 2** — backend MVP: CRUD маршрутов, auth, загрузка в S3, геопоиск по bbox
-- [ ] **Шаг 3** — веб: каталог, карта, SSR-страницы районов и маршрутов, редактирование маршрутов (включая геометрию на карте), модерация
+- [x] **Шаг 3** — веб: каталог, карта, SSR-страницы районов и маршрутов, редактирование маршрутов (включая геометрию на карте), модерация
+  - [x] каркас `/web`, dev-вход, карта с точками, каталог, SSR-страницы района и маршрута (только чтение)
+  - [x] создание и редактирование районов и маршрутов, геометрия на карте (`/edit/...`)
+  - [x] модерация: очередь правок и документов, сравнение с базовой ревизией, одобрение, отклонение, откат (`/moderation`, `/revisions/[id]`)
 - [ ] **Шаг 4** — веб: пользовательский контент — фото и редактор нитки, GPX (с импортом линий в маршрут), восхождения, комментарии, жалобы
+  - [x] backend фото и PDF (обработка фото, фото описания в ревизии, правовой статус документов), показ на странице маршрута
+  - [x] треки GPX/KML: обработка, сглаженный профиль, загрузка из веба, показ на карте маршрута, импорт линии в геометрию
+  - [x] ввод координат точек вручную в редакторе геометрии (десятичные, градусы-минуты, DMS)
+  - [ ] загрузка фото и PDF из веба, редактор нитки, восхождения, комментарии, жалобы, сверка профиля с DEM
 - [ ] **Шаг 5** — веб: фильтры, поиск, профили, экспорт GPX
 - [ ] **Шаг 6** — Android MVP, только чтение
 - [ ] **Шаг 7** — Android: пользовательский контент, офлайн-режим (скачивание района целиком), deep links
@@ -157,7 +164,7 @@
 ## 10. Команды
 
 ```bash
-# Инфраструктура (Postgres+PostGIS, MinIO)
+# Инфраструктура (Postgres+PostGIS, SeaweedFS как S3)
 docker compose -f infra/docker-compose.yml up -d
 
 # Миграции без backend и тесты схемы (подробнее — infra/db/README.md)
@@ -169,9 +176,15 @@ docker compose -f infra/docker-compose.yml exec db psql -U alproutes -d alproute
 cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
 cd backend && ./gradlew test          # нужен Docker (Testcontainers + PostGIS)
 
-# Web (папка /web появится на шаге 3)
-cd web && npm run dev
+# Web (нужен запущенный backend; адрес — API_URL, по умолчанию http://localhost:8080/api/v1)
+cd web && npm install
+cd web && npm run dev                 # http://localhost:3000, перед стартом генерирует типы из openapi.yaml
 cd web && npm run build
+cd web && npm run typecheck
+
+# Тестовые данные для локальной разработки (сгенерированные, с пометкой «ТЕСТ»; нужен запущенный backend)
+java infra/dev-seed/GenerateSamples.java infra/dev-seed/samples
+node infra/dev-seed/seed.mjs
 
 # Прототип дизайна (деплоится на GitHub Pages workflow'ом .github/workflows/deploy.yml)
 cd web-prototype && npm install && npm run dev
