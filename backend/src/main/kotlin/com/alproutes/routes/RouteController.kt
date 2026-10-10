@@ -30,25 +30,63 @@ class RouteController(private val service: RouteService, private val search: Rou
         @RequestParam(required = false) gradeMin: String?,
         @RequestParam(required = false) gradeMax: String?,
         @RequestParam(required = false) routeType: String?,
+        @RequestParam(required = false) gradeValues: List<String>?,
+        @RequestParam(required = false) hasTrack: Boolean?,
+        @RequestParam(required = false) hasDocument: Boolean?,
         @RequestParam(required = false) sort: String?,
         @RequestParam(required = false) cursor: String?,
         @RequestParam(required = false) limit: Int?,
     ) = search.search(
-        RouteQuery(
-            bbox = bbox?.let { Bbox.parse(it) },
-            near = near?.let { parseLonLat(it, "near") },
-            radiusM = radiusM,
-            areaId = areaId,
-            includeSubareas = includeSubareas,
-            q = q?.trim()?.takeIf { it.isNotEmpty() }?.also { if (it.length < 2) throw fieldError("q", "Минимум 2 символа") },
-            gradeSystem = gradeSystem,
-            gradeMin = gradeMin,
-            gradeMax = gradeMax,
-            routeType = routeType?.let { parseWire<RouteType>(it, "routeType") },
-            sort = sort?.let { s -> RouteSort.entries.firstOrNull { it.wire == s } ?: throw fieldError("sort", "Недопустимая сортировка") },
-            cursor = cursor,
-            limit = pageLimit(limit),
-        ),
+        query(bbox, near, radiusM, areaId, includeSubareas, q, gradeSystem, gradeMin, gradeMax, routeType, gradeValues, hasTrack, hasDocument)
+            .copy(
+                sort = sort?.let { s -> RouteSort.entries.firstOrNull { it.wire == s } ?: throw fieldError("sort", "Недопустимая сортировка") },
+                cursor = cursor,
+                limit = pageLimit(limit),
+            ),
+    )
+
+    @GetMapping("/routes/facets")
+    fun facets(
+        @RequestParam(required = false) bbox: String?,
+        @RequestParam(required = false) near: String?,
+        @RequestParam(required = false) radiusM: Int?,
+        @RequestParam(required = false) areaId: UUID?,
+        @RequestParam(required = false, defaultValue = "true") includeSubareas: Boolean,
+        @RequestParam(required = false) q: String?,
+        @RequestParam(required = false) gradeSystem: String?,
+        @RequestParam(required = false) gradeMin: String?,
+        @RequestParam(required = false) gradeMax: String?,
+        @RequestParam(required = false) routeType: String?,
+        @RequestParam(required = false) gradeValues: List<String>?,
+        @RequestParam(required = false) hasTrack: Boolean?,
+        @RequestParam(required = false) hasDocument: Boolean?,
+        @RequestParam(required = false) areaParentId: UUID?,
+    ) = search.facets(
+        query(bbox, near, radiusM, areaId, includeSubareas, q, gradeSystem, gradeMin, gradeMax, routeType, gradeValues, hasTrack, hasDocument),
+        areaParentId,
+    )
+
+    private fun query(
+        bbox: String?, near: String?, radiusM: Int?, areaId: UUID?, includeSubareas: Boolean, q: String?,
+        gradeSystem: String?, gradeMin: String?, gradeMax: String?, routeType: String?,
+        gradeValues: List<String>?, hasTrack: Boolean?, hasDocument: Boolean?,
+    ) = RouteQuery(
+        bbox = bbox?.let { Bbox.parse(it) },
+        near = near?.let { parseLonLat(it, "near") },
+        radiusM = radiusM,
+        areaId = areaId,
+        includeSubareas = includeSubareas,
+        q = q?.trim()?.takeIf { it.isNotEmpty() }?.also { if (it.length < 2) throw fieldError("q", "Минимум 2 символа") },
+        gradeSystem = gradeSystem,
+        gradeMin = gradeMin,
+        gradeMax = gradeMax,
+        routeType = routeType?.let { parseWire<RouteType>(it, "routeType") },
+        gradeValues = gradeValues?.flatMap { it.split(',') }?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct()?.takeIf { it.isNotEmpty() },
+        hasTrack = hasTrack,
+        hasDocument = hasDocument,
+        sort = null,
+        cursor = null,
+        limit = 20,
     )
 
     @GetMapping("/routes/map-points")

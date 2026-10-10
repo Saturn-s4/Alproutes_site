@@ -127,6 +127,15 @@ data class RouteSummary(
     val updatedAt: OffsetDateTime,
 )
 
+data class GradeCount(val system: String, val value: String, val count: Int)
+
+data class AreaCount(val area: AreaRef, val count: Int)
+
+data class MaterialCounts(val hasTrack: Int, val hasDocument: Int)
+
+/** Contract RouteFacets: counts for the catalogue filters. */
+data class RouteFacets(val total: Int, val grades: List<GradeCount>, val areas: List<AreaCount>, val materials: MaterialCounts)
+
 data class RouteMapPoint(
     val id: UUID,
     val slug: String,
