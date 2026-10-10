@@ -6,11 +6,14 @@ import type { RouteFeature, RouteFeatureKind } from '@/lib/api/types';
 import { featureKindLabel, loc } from '@/lib/i18n';
 import { DEFAULT_VIEW, themeColors } from '@/lib/map-style';
 import { FEATURE_ROLE } from '@/lib/route-features';
+import { formatLatLon, parseCoordinates } from '@/lib/coords';
 import { MapCanvas } from '../MapCanvas';
 import { usePrefs } from '../Prefs';
+import { TrackImport } from './TrackImport';
 
 const POINT_KINDS: RouteFeatureKind[] = ['start', 'summit', 'bivouac', 'descent_start'];
 const LINE_KINDS: RouteFeatureKind[] = ['route_line', 'approach', 'descent'];
+const MAX_MIDPOINT_LINE = 300;
 
 type Mode = { type: 'select' } | { type: 'point'; kind: RouteFeatureKind } | { type: 'line'; kind: RouteFeatureKind; coords: number[][] };
 
@@ -44,11 +47,17 @@ export function GeometryEditor({
   value,
   onChange,
   center,
+  routeId,
+  onTrackFile,
 }: {
   value: RouteFeature[];
   onChange: (features: RouteFeature[]) => void;
   /** Where to start when there is no geometry yet (e.g. the area centre). */
   center?: [number, number] | null;
+  /** Existing route: lines can come from its GPX/KML tracks; new files become its tracks. */
+  routeId?: string;
+  /** New route: a GPX/KML file picked here, to upload as a track once the route exists. */
+  onTrackFile?: (file: File) => void;
 }) {
   const { t, lang } = usePrefs();
   const [mode, setMode] = useState<Mode>({ type: 'select' });
@@ -78,7 +87,8 @@ export function GeometryEditor({
       line.coordinates.forEach((c, v) => {
         handles.push({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: { v, mid: 0 } });
         const next = line.coordinates[v + 1];
-        if (next) {
+        // Dense lines (imported tracks) get no midpoints: they would bury the line.
+        if (next && line.coordinates.length <= MAX_MIDPOINT_LINE) {
           const mid = [((c[0] as number) + (next[0] as number)) / 2, ((c[1] as number) + (next[1] as number)) / 2];
           handles.push({ type: 'Feature', geometry: { type: 'Point', coordinates: mid }, properties: { v: v + 1, mid: 1 } });
         }
@@ -138,9 +148,14 @@ export function GeometryEditor({
       });
       map.addLayer({ id: 'ed-draft-line', type: 'line', source: 'ed-draft', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-width': 3, 'line-dasharray': [2, 1] } });
       map.addLayer({ id: 'ed-draft-pts', type: 'circle', source: 'ed-draft', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5 } });
+      // Vertex handles grow with zoom; midpoints (drag to insert a vertex) appear only close up.
       map.addLayer({
-        id: 'ed-handles', type: 'circle', source: 'ed-handles',
-        paint: { 'circle-radius': ['case', ['==', ['get', 'mid'], 1], 5, 8], 'circle-stroke-width': 2, 'circle-opacity': ['case', ['==', ['get', 'mid'], 1], 0.6, 1] },
+        id: 'ed-handles', type: 'circle', source: 'ed-handles', filter: ['==', ['get', 'mid'], 0],
+        paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.5, 13, 4, 16, 8], 'circle-stroke-width': 1.5 },
+      });
+      map.addLayer({
+        id: 'ed-mids', type: 'circle', source: 'ed-handles', filter: ['==', ['get', 'mid'], 1], minzoom: 13,
+        paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 3, 16, 5], 'circle-stroke-width': 1.5, 'circle-opacity': 0.6 },
       });
 
       const paint = () => {
@@ -151,8 +166,10 @@ export function GeometryEditor({
         map.setPaintProperty('ed-points', 'circle-stroke-color', ['case', ['==', ['get', 'sel'], 1], c.text, c.bg] as unknown as string);
         map.setPaintProperty('ed-draft-line', 'line-color', c.text);
         map.setPaintProperty('ed-draft-pts', 'circle-color', c.text);
-        map.setPaintProperty('ed-handles', 'circle-color', c.bg);
-        map.setPaintProperty('ed-handles', 'circle-stroke-color', c.text);
+        for (const layer of ['ed-handles', 'ed-mids']) {
+          map.setPaintProperty(layer, 'circle-color', c.bg);
+          map.setPaintProperty(layer, 'circle-stroke-color', c.text);
+        }
       };
       paint();
 
@@ -212,6 +229,7 @@ export function GeometryEditor({
       };
       map.on('mousedown', 'ed-points', (e) => startDrag(e, 'ed-points'));
       map.on('mousedown', 'ed-handles', (e) => startDrag(e, 'ed-handles'));
+      map.on('mousedown', 'ed-mids', (e) => startDrag(e, 'ed-handles'));
       map.on('mousemove', (e) => {
         if (!drag) return;
         const f = state.current.value[drag.feature];
@@ -238,7 +256,7 @@ export function GeometryEditor({
         const coords = line.coordinates.filter((_, k) => k !== (f.properties.v as number));
         update(sel, { ...state.current.value[sel]!, line: { type: 'LineString', coordinates: coords } });
       });
-      for (const layer of ['ed-points', 'ed-lines', 'ed-handles']) {
+      for (const layer of ['ed-points', 'ed-lines', 'ed-handles', 'ed-mids']) {
         map.on('mouseenter', layer, () => {
           if (state.current.mode.type === 'select') map.getCanvas().style.cursor = 'pointer';
         });
@@ -268,6 +286,29 @@ export function GeometryEditor({
     [next[i], next[j]] = [next[j]!, next[i]!];
     onChange(next);
     setSelected(j);
+  };
+
+  const flyTo = (lonLat: number[]) => mapRef.current?.easeTo({ center: lonLat as [number, number], zoom: Math.max(mapRef.current.getZoom(), 13) });
+
+  /** Typed coordinates: a new point in point mode, the next vertex in line mode. */
+  const addTyped = (lonLat: [number, number]) => {
+    if (mode.type === 'point') {
+      const next = [...value, { kind: mode.kind, point: { type: 'Point' as const, coordinates: lonLat } }];
+      onChange(next);
+      setSelected(next.length - 1);
+      setMode({ type: 'select' });
+    } else if (mode.type === 'line') {
+      setMode({ ...mode, coords: [...mode.coords, lonLat] });
+    }
+    flyTo(lonLat);
+  };
+
+  const importLine = (f: RouteFeature) => {
+    const next = [...value, f];
+    onChange(next);
+    setSelected(next.length - 1);
+    const b = bounds([f]);
+    if (b) mapRef.current?.fitBounds(b, { padding: 60, maxZoom: 15 });
   };
 
   const sel = selected != null ? value[selected] : undefined;
@@ -303,6 +344,17 @@ export function GeometryEditor({
             </>
           )}
         </div>
+        {mode.type !== 'select' && (
+          <div className="geo-group">
+            <span className="label">{t('geo.coords')}</span>
+            <CoordInput
+              key={mode.type === 'line' ? `line-${mode.coords.length}` : 'point'}
+              submitLabel={mode.type === 'point' ? t('geo.placePoint') : t('geo.addVertex')}
+              onSubmit={addTyped}
+            />
+          </div>
+        )}
+        {mode.type === 'select' && <TrackImport routeId={routeId} onImport={importLine} onFile={onTrackFile} />}
       </div>
       <div className="geo-body">
         <div className="geo-map">
@@ -334,7 +386,18 @@ export function GeometryEditor({
               </div>
               {sel.point && (
                 <>
-                  <span className="mono muted">{sel.point.coordinates[1]?.toFixed(5)}, {sel.point.coordinates[0]?.toFixed(5)}</span>
+                  <div className="field">
+                    <span>{t('geo.coords')}</span>
+                    <CoordInput
+                      key={`${selected}:${sel.point.coordinates.join(',')}`}
+                      initial={formatLatLon(sel.point.coordinates)}
+                      submitLabel={t('geo.apply')}
+                      onSubmit={(c) => {
+                        setFeature(selected, { point: { type: 'Point', coordinates: c } });
+                        flyTo(c);
+                      }}
+                    />
+                  </div>
                   <label className="field">
                     {t('geo.elevation')}
                     <input className="input" type="number" min={-500} max={9000} placeholder={t('common.noData')}
@@ -357,6 +420,42 @@ export function GeometryEditor({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Coordinates typed by hand (decimal, degrees-minutes, DMS); see lib/coords.ts. */
+function CoordInput({ initial = '', submitLabel, onSubmit }: { initial?: string; submitLabel: string; onSubmit: (lonLat: [number, number]) => void }) {
+  const { t } = usePrefs();
+  const [text, setText] = useState(initial);
+  const parsed = text.trim() ? parseCoordinates(text) : null;
+  const submit = () => {
+    if (parsed?.ok) {
+      onSubmit(parsed.lonLat);
+      setText('');
+    }
+  };
+  return (
+    <div className="coord-input">
+      <input
+        className="input mono"
+        value={text}
+        placeholder="43.35147, 42.43611"
+        aria-invalid={parsed ? !parsed.ok : undefined}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            // Inside the route form Enter must not submit the whole form.
+            e.preventDefault();
+            e.stopPropagation();
+            submit();
+          }
+        }}
+      />
+      <button type="button" className="btn btn-sm btn-ghost" disabled={!parsed?.ok} onClick={submit}>{submitLabel}</button>
+      <span className={parsed && !parsed.ok ? 'field-error' : 'field-hint'}>
+        {parsed ? (parsed.ok ? formatLatLon(parsed.lonLat) : t(parsed.error === 'range' ? 'geo.coordsRange' : 'geo.coordsFormat')) : t('geo.coordsHint')}
+      </span>
     </div>
   );
 }

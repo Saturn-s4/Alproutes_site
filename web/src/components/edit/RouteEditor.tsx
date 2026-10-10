@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '@/lib/api/browser';
 import type { AreaSummary, Grade, LocalizedText, Photo, RouteContentPhoto, RouteFeature, RouteType } from '@/lib/api/types';
-import { cleanText, errorsUnder, fieldErrors, intOrNull, type FieldErrors } from '@/lib/edit';
+import { cleanText, errorsUnder, fieldErrors, intOrNull, newId, type FieldErrors } from '@/lib/edit';
+import { uploadFile } from '@/lib/upload';
 import { monthName, routeTypeLabel } from '@/lib/i18n';
 import { usePrefs } from '../Prefs';
 import { Field, GradesEditor, LocalizedInput, SignInFirst, AreaPicker } from './Fields';
@@ -51,6 +52,8 @@ export function RouteEditor({ target }: { target: Target }) {
   const [message, setMessage] = useState<{ text: string; link?: string } | null>(null);
   const [loading, setLoading] = useState(target.kind === 'edit');
   const [busy, setBusy] = useState(false);
+  /** New route only: GPX/KML files to upload as its tracks right after it is created. */
+  const [pendingTracks, setPendingTracks] = useState<File[]>([]);
   const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -155,9 +158,25 @@ export function RouteEditor({ target }: { target: Target }) {
             params: { path: { routeId: target.routeId } },
             body: { baseRevisionId: baseRevisionId!, content, changeSummary: summary.trim() || undefined, publish: isModerator && publish },
           });
-    setBusy(false);
     if (res.data) {
       const rev = res.data;
+      // Tracks need the route to exist: upload the files picked in the form now.
+      const failed: string[] = [];
+      for (const file of pendingTracks) {
+        try {
+          const uploadId = await uploadFile(file, 'track');
+          const created = await api.POST('/routes/{routeId}/tracks', { params: { path: { routeId: rev.routeId } }, body: { id: newId(), uploadId } });
+          if (!created.data) failed.push(file.name);
+        } catch {
+          failed.push(file.name);
+        }
+      }
+      setBusy(false);
+      if (failed.length) {
+        // The route itself is saved; say which files did not make it instead of losing them silently.
+        setMessage({ text: `${t('ed.tracksFailed')}: ${failed.join(', ')}`, link: `/revisions/${rev.id}` });
+        return;
+      }
       if (rev.status === 'approved') {
         const route = await api.GET('/routes/{routeId}', { params: { path: { routeId: rev.routeId } } });
         router.push(route.data ? `/routes/${route.data.slug}` : `/revisions/${rev.id}`);
@@ -167,6 +186,7 @@ export function RouteEditor({ target }: { target: Target }) {
       router.refresh();
       return;
     }
+    setBusy(false);
     const problem = res.error;
     setErrors(fieldErrors(problem));
     if (problem?.type === 'revision-conflict') {
@@ -205,17 +225,17 @@ export function RouteEditor({ target }: { target: Target }) {
         <h2 className="h2">{t('ed.facts')}</h2>
         <div className="grid3">
           <Field label={t('route.type')} error={err('content.routeType')}>
-            <div className="segmented">
-              <button type="button" aria-pressed={form.routeType === null} onClick={() => set('routeType', null)}>{t('common.noData')}</button>
+            <div className="chips">
+              <button type="button" className="chip chip-lg" aria-pressed={form.routeType === null} onClick={() => set('routeType', null)}>{t('common.noData')}</button>
               {ROUTE_TYPES.map((rt) => (
-                <button key={rt} type="button" aria-pressed={form.routeType === rt} onClick={() => set('routeType', rt)}>{routeTypeLabel(rt, lang)}</button>
+                <button key={rt} type="button" className="chip chip-lg" aria-pressed={form.routeType === rt} onClick={() => set('routeType', rt)}>{routeTypeLabel(rt, lang)}</button>
               ))}
             </div>
           </Field>
           <Field label={t('route.traverse')}>
-            <div className="segmented">
+            <div className="chips">
               {([null, true, false] as const).map((v) => (
-                <button key={String(v)} type="button" aria-pressed={form.isTraverse === v} onClick={() => set('isTraverse', v)}>
+                <button key={String(v)} type="button" className="chip chip-lg" aria-pressed={form.isTraverse === v} onClick={() => set('isTraverse', v)}>
                   {v === null ? t('common.noData') : t(v ? 'route.yes' : 'route.no')}
                 </button>
               ))}
@@ -269,7 +289,25 @@ export function RouteEditor({ target }: { target: Target }) {
       <section className="form-section">
         <h2 className="h2">{t('route.map')}</h2>
         {err('content.features').map((m) => <span key={m} className="field-error">{m}</span>)}
-        <GeometryEditor value={form.features} onChange={(f) => set('features', f)} center={center} />
+        <GeometryEditor
+          value={form.features}
+          onChange={(f) => set('features', f)}
+          center={center}
+          routeId={target.kind === 'edit' ? target.routeId : undefined}
+          onTrackFile={target.kind === 'create' ? (f) => setPendingTracks((x) => [...x.filter((y) => y.name !== f.name), f]) : undefined}
+        />
+        {pendingTracks.length > 0 && (
+          <div className="pending-tracks">
+            <span className="field-hint">{t('ed.pendingTracks')}</span>
+            {pendingTracks.map((f) => (
+              <span key={f.name} className="chip chip-lg">
+                {f.name}
+                <button type="button" className="linklike" aria-label={t('geo.delete')}
+                  onClick={() => setPendingTracks((x) => x.filter((y) => y !== f))}>✕</button>
+              </span>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="form-section">

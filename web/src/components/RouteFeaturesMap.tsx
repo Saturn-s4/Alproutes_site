@@ -1,7 +1,8 @@
 'use client';
 
-import type { LngLatBoundsLike, Map as MlMap } from 'maplibre-gl';
+import type { GeoJSONSource, LngLatBoundsLike, Map as MlMap } from 'maplibre-gl';
 import { useCallback } from 'react';
+import { publicApi } from '@/lib/api/browser';
 import type { RouteFeature } from '@/lib/api/types';
 import { themeColors } from '@/lib/map-style';
 import { FEATURE_ROLE } from '@/lib/route-features';
@@ -15,9 +16,16 @@ function bounds(features: RouteFeature[]): LngLatBoundsLike | null {
   return [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)];
 }
 
-export function RouteFeaturesMap({ features }: { features: RouteFeature[] }) {
+/** Route geometry, plus the route's GPX/KML tracks underneath as thin dashed lines. */
+export function RouteFeaturesMap({ features, trackIds = [] }: { features: RouteFeature[]; trackIds?: string[] }) {
   const onReady = useCallback(
     (map: MlMap) => {
+      map.addSource('tracks', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      map.addLayer({
+        id: 'tracks', type: 'line', source: 'tracks',
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-width': 2, 'line-dasharray': [1, 1.5], 'line-opacity': 0.85 },
+      });
       map.addSource('features', {
         type: 'geojson',
         data: {
@@ -52,13 +60,28 @@ export function RouteFeaturesMap({ features }: { features: RouteFeature[] }) {
         map.setPaintProperty('lines', 'line-color', byRole);
         map.setPaintProperty('points', 'circle-color', byRole);
         map.setPaintProperty('points', 'circle-stroke-color', c.bg);
+        map.setPaintProperty('tracks', 'line-color', c.blue);
       };
       paint();
       const b = bounds(features);
       if (b) map.fitBounds(b, { padding: 48, maxZoom: 14, duration: 0 });
+
+      if (trackIds.length) {
+        void Promise.all(trackIds.map((id) => publicApi.GET('/tracks/{trackId}/geometry', { params: { path: { trackId: id } } }))).then((res) => {
+          const lines = res.flatMap((r) => (r.data ? [{ type: 'Feature' as const, geometry: r.data, properties: {} }] : []));
+          map.getSource<GeoJSONSource>('tracks')?.setData({ type: 'FeatureCollection', features: lines });
+          // Without drawn geometry the tracks decide the view.
+          if (!b && lines.length) {
+            const coords = lines.flatMap((l) => l.geometry.coordinates.flat());
+            const lons = coords.map((c) => c[0] as number);
+            const lats = coords.map((c) => c[1] as number);
+            map.fitBounds([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], { padding: 48, maxZoom: 14, duration: 0 });
+          }
+        });
+      }
       return paint;
     },
-    [features],
+    [features, trackIds],
   );
 
   const b = bounds(features) as [number, number, number, number] | null;

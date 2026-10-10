@@ -8,6 +8,7 @@ import { RouteEditLinks } from '@/components/edit/EditLinks';
 import { Grades } from '@/components/Grades';
 import { RouteFeaturesMap } from '@/components/RouteFeaturesMap';
 import { Disclaimer, LText, NoData } from '@/components/Text';
+import { Tracks } from '@/components/Tracks';
 import { UserPhotos } from '@/components/UserPhotos';
 import { serverApi } from '@/lib/api/server';
 import type { RouteDetail } from '@/lib/api/types';
@@ -38,11 +39,13 @@ export default async function RoutePage({ params }: Props) {
   const t = translator(lang);
   const route = await loadRoute((await params).slug);
   const description = loc(route.description, lang);
-  const [userPhotos, documents] = await Promise.all([
+  const [userPhotos, documents, tracks] = await Promise.all([
     serverApi.GET('/routes/{routeId}/photos', { params: { path: { routeId: route.id }, query: { inDescription: false, limit: 24 } } }),
     serverApi.GET('/routes/{routeId}/documents', { params: { path: { routeId: route.id }, query: { limit: 50 } } }),
+    serverApi.GET('/routes/{routeId}/tracks', { params: { path: { routeId: route.id }, query: { limit: 50 } } }),
   ]);
-  if (!userPhotos.data || !documents.data) throw new Error('Route media request failed');
+  if (!userPhotos.data || !documents.data || !tracks.data) throw new Error('Route media request failed');
+  const trackIds = tracks.data.items.map((x) => x.id);
 
   return (
     <div className="page">
@@ -75,6 +78,11 @@ export default async function RoutePage({ params }: Props) {
           <DescriptionPhotos photos={route.descriptionPhotos} refs={route.photos ?? []} />
 
           <section className="route-section">
+            <h2 className="h2">{t('trk.title')} · <span className="mono">{tracks.data.items.length}</span></h2>
+            <Tracks routeId={route.id} initial={tracks.data.items} />
+          </section>
+
+          <section className="route-section">
             <h2 className="h2">{t('route.archive')} · <span className="mono">{documents.data.items.length}</span></h2>
             <Documents documents={documents.data.items} />
           </section>
@@ -87,8 +95,8 @@ export default async function RoutePage({ params }: Props) {
 
         <aside className="route-aside">
           <div className="route-map">
-            {route.features?.length ? (
-              <RouteFeaturesMap features={route.features} />
+            {route.features?.length || trackIds.length ? (
+              <RouteFeaturesMap features={route.features ?? []} trackIds={trackIds} />
             ) : (
               <p className="empty">{t('route.noGeometry')}</p>
             )}
