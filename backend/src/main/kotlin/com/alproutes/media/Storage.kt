@@ -71,16 +71,23 @@ class MediaStorage(
 
     fun publicUrl(key: String): String = props.s3.publicBaseUrl.trimEnd('/') + "/" + key
 
-    /** Short-lived link to a private object, shown inline by the browser (PDF viewer). */
-    fun presignedDownload(key: String, contentType: String, fileName: String): String {
+    /** Short-lived link to a private object: shown inline (PDF viewer) or saved as a file. */
+    fun presignedDownload(key: String, contentType: String, fileName: String, attachment: Boolean = false): String {
         val get = GetObjectRequest.builder()
             .bucket(props.s3.bucket)
             .key(key)
             .responseContentType(contentType)
-            .responseContentDisposition("inline; filename=\"$fileName\"")
+            .responseContentDisposition(contentDisposition(if (attachment) "attachment" else "inline", fileName))
             .build()
         return presigner.presignGetObject(
             GetObjectPresignRequest.builder().signatureDuration(props.s3.downloadUrlTtl).getObjectRequest(get).build(),
         ).url().toString()
     }
+}
+
+/** RFC 6266: an ASCII fallback name plus the exact UTF-8 one (Cyrillic file names are common). */
+internal fun contentDisposition(type: String, fileName: String): String {
+    val ascii = fileName.map { if (it.code in 0x20..0x7e && it != '"' && it.code != 0x5c) it else '_' }.joinToString("")
+    val utf8 = java.net.URLEncoder.encode(fileName, Charsets.UTF_8).replace("+", "%20")
+    return "$type; filename=\"$ascii\"; filename*=UTF-8''$utf8"
 }

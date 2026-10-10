@@ -188,6 +188,117 @@ class MediaTest : IntegrationTest() {
         assertFalse(get("/moderation/documents", mod).expect(200).json["items"].any { it["id"].asText() == docId })
     }
 
+
+    // ------------------------------------------------------------------ tracks
+
+    @Test
+    fun `gpx track is parsed with a smoothed profile and can be imported as a route line`() {
+        val user = token()
+        val mod = token(UserRole.MODERATOR)
+        val areaId = createArea(mod)
+        val created = post("/routes", mod, mapOf("content" to content(areaId), "publish" to true)).expect(201).json
+        val routeId = created["routeId"].asText()
+
+        // Synthetic test track: ~1.1 km north, steady climb of 200 m with ±2 m sensor jitter.
+        val points = (0..100).map { i ->
+            val jitter = if (i % 2 == 0) 2.0 else -2.0
+            Triple(10.0, 10.0 + i * 0.0001, 1000.0 + i * 2.0 + jitter)
+        }
+        val trackId = UUID.randomUUID()
+        val uploadId = upload(user, "track", "application/gpx+xml", gpx(listOf(points)), "тестовый трек.gpx")
+        post("/routes/$routeId/tracks", user, mapOf("id" to trackId, "uploadId" to uploadId, "note" to "Тест")).expect(201)
+        val track = awaitTrack(trackId, user)
+
+        assertEquals("gpx", track["format"].asText())
+        assertEquals("тестовый трек.gpx", track["originalFilename"].asText())
+        assertTrue(track["lengthM"].asInt() in 1080..1150, "length ${track["lengthM"]}")
+        // Raw jitter sums to ~600 m of "gain"; smoothing must bring it close to the real 200 m.
+        assertTrue(track["elevationGainM"].asInt() in 180..220, "gain ${track["elevationGainM"]}")
+        assertTrue(track["elevationSource"].isNull)                     // unknown, not guessed
+        assertEquals("2026-07-01", track["recordedOn"].asText())
+
+        val profile = get("/tracks/$trackId/profile").expect(200).json
+        assertTrue(profile["points"].size() > 10)
+        val geometry = get("/tracks/$trackId/geometry").expect(200).json
+        assertEquals(3, geometry["coordinates"][0][0].size())
+        assertEquals(302, get("/tracks/$trackId/download").status)
+
+        // Import: the line is copied into the revision; the track stays the provenance.
+        val rev = post("/routes/$routeId/revisions", mod, mapOf(
+            "baseRevisionId" to created["id"].asText(),
+            "content" to content(areaId, features = listOf(mapOf("kind" to "route_line", "sourceTrackId" to trackId))),
+            "publish" to true,
+        )).expect(201).json
+        val feature = rev["content"]["features"][0]
+        assertEquals(trackId.toString(), feature["sourceTrackId"].asText())
+        assertEquals(101, feature["line"]["coordinates"].size())
+        assertEquals(2, feature["line"]["coordinates"][0].size())        // route geometry is 2D
+
+        assertEquals(listOf(trackId.toString()), get("/routes/$routeId/tracks").expect(200).json["items"].map { it["id"].asText() })
+        delete("/tracks/$trackId", token()).expect(403)
+        delete("/tracks/$trackId", user).expect(204)
+        assertEquals(0, get("/routes/$routeId/tracks").expect(200).json["items"].size())
+        assertEquals(1, get("/routes/$routeId").expect(200).json["features"].size())   // the copy survives
+    }
+
+    @Test
+    fun `kml without heights has no profile, gapped track cannot be imported whole, xxe is refused`() {
+        val user = token()
+        val mod = token(UserRole.MODERATOR)
+        val areaId = createArea(mod)
+        val created = post("/routes", mod, mapOf("content" to content(areaId), "publish" to true)).expect(201).json
+        val routeId = created["routeId"].asText()
+
+        val kml = """<?xml version="1.0"?><kml xmlns="http://www.opengis.net/kml/2.2"><Placemark><LineString>
+            <coordinates>10.0,10.0 10.001,10.001 10.002,10.003</coordinates></LineString></Placemark></kml>""".toByteArray()
+        val kmlId = UUID.randomUUID()
+        post("/routes/$routeId/tracks", user, mapOf("id" to kmlId, "uploadId" to upload(user, "track", "application/vnd.google-earth.kml+xml", kml))).expect(201)
+        val k = awaitTrack(kmlId, user)
+        assertEquals("kml", k["format"].asText())
+        assertTrue(k["elevationGainM"].isNull)
+        get("/tracks/$kmlId/profile").expect(404)
+        assertEquals(2, get("/tracks/$kmlId/geometry").expect(200).json["coordinates"][0][0].size())   // no fake Z
+
+        // Two segments 5 km apart do not merge into one line.
+        val seg1 = (0..5).map { Triple(10.0, 10.0 + it * 0.0001, 1000.0) }
+        val seg2 = (0..5).map { Triple(10.05, 10.0 + it * 0.0001, 1000.0) }
+        val gapId = UUID.randomUUID()
+        post("/routes/$routeId/tracks", user, mapOf("id" to gapId, "uploadId" to upload(user, "track", "application/gpx+xml", gpx(listOf(seg1, seg2))))).expect(201)
+        awaitTrack(gapId, user)
+        val res = post("/routes/$routeId/revisions", mod, mapOf(
+            "baseRevisionId" to created["id"].asText(),
+            "content" to content(areaId, features = listOf(mapOf("kind" to "route_line", "sourceTrackId" to gapId))),
+        )).expect(400)
+        assertEquals("track-not-contiguous", res.json["type"].asText())
+
+        val xxe = """<?xml version="1.0"?><!DOCTYPE gpx [<!ENTITY x SYSTEM "file:///etc/passwd">]>
+            <gpx><trk><trkseg><trkpt lat="10" lon="10"><name>&x;</name></trkpt><trkpt lat="10.1" lon="10"/></trkseg></trk></gpx>""".toByteArray()
+        val xxeId = UUID.randomUUID()
+        post("/routes/$routeId/tracks", user, mapOf("id" to xxeId, "uploadId" to upload(user, "track", "application/gpx+xml", xxe))).expect(201)
+        assertEquals("failed", awaitTrack(xxeId, user, allowFailed = true)["processingStatus"].asText())
+    }
+
+    private fun gpx(segments: List<List<Triple<Double, Double, Double>>>): ByteArray {
+        val segs = segments.joinToString("") { seg ->
+            "<trkseg>" + seg.mapIndexed { i, (lon, lat, ele) ->
+                "<trkpt lat=\"$lat\" lon=\"$lon\"><ele>$ele</ele><time>2026-07-01T05:%02d:00Z</time></trkpt>".format(i % 60)
+            }.joinToString("") + "</trkseg>"
+        }
+        return "<?xml version=\"1.0\"?><gpx version=\"1.1\" xmlns=\"http://www.topografix.com/GPX/1/1\"><trk>$segs</trk></gpx>".toByteArray()
+    }
+
+    private fun awaitTrack(id: UUID, token: String, allowFailed: Boolean = false): JsonNode {
+        repeat(100) {
+            val t = get("/tracks/$id", token).expect(200).json
+            when (t["processingStatus"].asText()) {
+                "ready" -> return t
+                "failed" -> if (allowFailed) return t else throw AssertionError("Track failed: ${t["processingError"]}")
+            }
+            Thread.sleep(100)
+        }
+        throw AssertionError("Track was not processed in time")
+    }
+
     // ----------------------------------------------------------------- helpers
 
     private fun publishedRoute(): String {
@@ -214,8 +325,8 @@ class MediaTest : IntegrationTest() {
     )
 
     /** Requests an upload slot and PUTs the bytes exactly as a client would. */
-    private fun upload(token: String, purpose: String, contentType: String, bytes: ByteArray): String {
-        val slot = post("/uploads", token, mapOf("purpose" to purpose, "contentType" to contentType, "sizeBytes" to bytes.size)).expect(201).json
+    private fun upload(token: String, purpose: String, contentType: String, bytes: ByteArray, fileName: String? = null): String {
+        val slot = post("/uploads", token, mapOf("purpose" to purpose, "contentType" to contentType, "sizeBytes" to bytes.size, "fileName" to fileName)).expect(201).json
         val req = HttpRequest.newBuilder(URI(slot["url"].asText())).PUT(HttpRequest.BodyPublishers.ofByteArray(bytes))
         slot["headers"].properties().forEach { (k, v) -> req.header(k, v.asText()) }
         val res = http.send(req.build(), HttpResponse.BodyHandlers.ofString())

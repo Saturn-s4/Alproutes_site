@@ -2502,6 +2502,7 @@ components:
           type: string
           nullable: true
           enum: [gps, barometric, dem, mixed]
+          description: null — неизвестен
         processingStatus: { $ref: '#/components/schemas/ProcessingStatus' }
         processingError: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
@@ -2534,7 +2535,9 @@ components:
       properties:
         source:
           type: string
+          nullable: true
           enum: [gps, barometric, dem, mixed]
+          description: null — источник высот неизвестен (по файлу GPX его не определить, а DEM-сверка не выполнялась)
         points:
           type: array
           description: '`[distanceM, elevationM]` по возрастанию дистанции, после сглаживания и прореживания'

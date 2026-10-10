@@ -177,6 +177,29 @@ const userPhotos = [
 for (const [token, id, file, kind, caption] of userPhotos) await ensurePhoto(token, route.id, id, file, kind, caption);
 await awaitReady(mod, userPhotos.map(([, id]) => id));
 
+// A synthetic GPX track along the test line (generated here, not a recording): climb with sensor jitter.
+function testGpx() {
+  const pts = [];
+  for (let i = 0; i <= 120; i++) {
+    const f = i / 120;
+    const lon = 42.99 + 0.03 * f;
+    const lat = 43.095 + 0.025 * f + 0.002 * Math.sin(f * Math.PI * 3);
+    const ele = 2600 + 900 * f + (i % 2 ? 3 : -3);
+    const time = new Date(Date.UTC(2026, 6, 15, 4, 0) + i * 90_000).toISOString();
+    pts.push(`<trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}"><ele>${ele.toFixed(1)}</ele><time>${time}</time></trkpt>`);
+  }
+  return `<?xml version="1.0"?><gpx version="1.1" creator="alproutes dev-seed (TEST)" xmlns="http://www.topografix.com/GPX/1/1">` +
+    `<trk><name>TEST track</name><trkseg>${pts.join('')}</trkseg></trk></gpx>`;
+}
+const trackId = '5e1d0000-0000-4000-8000-000000000021';
+if (!(await tryGet(`/tracks/${trackId}`, anna))) {
+  const bytes = Buffer.from(testGpx());
+  const slot = await call('POST', '/uploads', anna, { purpose: 'track', contentType: 'application/gpx+xml', sizeBytes: bytes.length, fileName: 'тестовый-трек.gpx' });
+  const put = await fetch(slot.url, { method: 'PUT', headers: slot.headers, body: bytes });
+  if (!put.ok) throw new Error(`PUT track -> ${put.status}`);
+  await call('POST', `/routes/${route.id}/tracks`, anna, { id: trackId, uploadId: slot.uploadId, note: 'Синтетический тестовый трек' });
+}
+
 // Documents: one with cleared rights (public), one left for the moderation queue (hidden).
 await ensureDocument(anna, mod, route.id, 'document-1.pdf', 'Тестовый документ 1', { rightsStatus: 'own_work', visibility: 'visible' });
 await ensureDocument(boris, mod, route.id, 'document-2.pdf', 'Тестовый документ 2 (ждёт проверки прав)', null);
