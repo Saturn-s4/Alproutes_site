@@ -115,7 +115,12 @@
 - [x] **Шаг 1** — схема БД и OpenAPI-контракт
 - [ ] **Шаг 2** — backend MVP: CRUD маршрутов, auth, загрузка в S3, геопоиск по bbox
 - [ ] **Шаг 3** — веб: каталог, карта, SSR-страницы районов и маршрутов, редактирование маршрутов (включая геометрию на карте), модерация
+  - [x] каркас `/web`, dev-вход, карта с точками, каталог, SSR-страницы района и маршрута (только чтение)
+  - [ ] создание и редактирование районов и маршрутов, геометрия на карте
+  - [ ] модерация: очередь правок, одобрение, отклонение, откат
 - [ ] **Шаг 4** — веб: пользовательский контент — фото и редактор нитки, GPX (с импортом линий в маршрут), восхождения, комментарии, жалобы
+  - [x] backend фото и PDF (обработка фото, фото описания в ревизии, правовой статус документов), показ на странице маршрута
+  - [ ] загрузка фото и PDF из веба (нужен CORS на S3), редактор нитки, треки, восхождения, комментарии, жалобы
 - [ ] **Шаг 5** — веб: фильтры, поиск, профили, экспорт GPX
 - [ ] **Шаг 6** — Android MVP, только чтение
 - [ ] **Шаг 7** — Android: пользовательский контент, офлайн-режим (скачивание района целиком), deep links
@@ -169,9 +174,15 @@ docker compose -f infra/docker-compose.yml exec db psql -U alproutes -d alproute
 cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
 cd backend && ./gradlew test          # нужен Docker (Testcontainers + PostGIS)
 
-# Web (папка /web появится на шаге 3)
-cd web && npm run dev
+# Web (нужен запущенный backend; адрес — API_URL, по умолчанию http://localhost:8080/api/v1)
+cd web && npm install
+cd web && npm run dev                 # http://localhost:3000, перед стартом генерирует типы из openapi.yaml
 cd web && npm run build
+cd web && npm run typecheck
+
+# Тестовые данные для локальной разработки (сгенерированные, с пометкой «ТЕСТ»; нужен запущенный backend)
+java infra/dev-seed/GenerateSamples.java infra/dev-seed/samples
+node infra/dev-seed/seed.mjs
 
 # Прототип дизайна (деплоится на GitHub Pages workflow'ом .github/workflows/deploy.yml)
 cd web-prototype && npm install && npm run dev

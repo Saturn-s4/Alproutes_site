@@ -1,0 +1,9 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.env*.local
+# Generated from /shared/openapi.yaml by `npm run gen:api`.
+src/lib/api/schema.d.ts
+# Copied from node_modules by `npm run prepare:assets`.
+public/maplibre/
