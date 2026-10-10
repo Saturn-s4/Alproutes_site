@@ -8,7 +8,6 @@ import com.alproutes.common.GeoJsonPoint
 import com.alproutes.common.LocalizedText
 import com.alproutes.common.Page
 import com.alproutes.common.Slugs
-import com.alproutes.common.Validator
 import com.alproutes.common.Wire
 import com.alproutes.common.conflict
 import com.alproutes.common.fieldError
