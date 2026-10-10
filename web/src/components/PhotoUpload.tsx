@@ -25,14 +25,15 @@ type Item = {
 
 /**
  * Photos of a route: pick several files, set type and caption for each, upload one by one.
+ * Without [routeId] (a route being created) the photos are uploaded unattached (`POST /photos`)
+ * and the new route takes them through its description.
  * Files go straight to S3 by pre-signed URL; the server makes EXIF-free derivatives.
  * [onAdded] gets every photo as soon as it exists and again once processing has finished.
  */
 export function PhotoUpload({
   routeId, onAdded, defaultKind = 'overview', title,
-}: { routeId: string; onAdded: (p: Photo) => void; defaultKind?: PhotoKind; title?: string }) {
+}: { routeId?: string; onAdded: (p: Photo) => void; defaultKind?: PhotoKind; title?: string }) {
   const { t, lang } = usePrefs();
-  const inputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -68,10 +69,10 @@ export function PhotoUpload({
     try {
       const uploadId = await uploadFile(it.file, 'photo', (f) => patch(it.key, { progress: f }));
       const caption = it.caption.trim();
-      const { data, error } = await api.POST('/routes/{routeId}/photos', {
-        params: { path: { routeId } },
-        body: { id: it.id, uploadId, kind: it.kind, caption: caption || undefined, captionLanguage: caption ? lang : undefined },
-      });
+      const body = { id: it.id, uploadId, kind: it.kind, caption: caption || undefined, captionLanguage: caption ? lang : undefined };
+      const { data, error } = routeId
+        ? await api.POST('/routes/{routeId}/photos', { params: { path: { routeId } }, body })
+        : await api.POST('/photos', { body });
       if (!data) throw new UploadError(error?.errors?.[0]?.message ?? error?.detail ?? t('ph.failed'));
       onAdded(data);
       patch(it.key, { state: 'processing' });
@@ -98,7 +99,7 @@ export function PhotoUpload({
       <b>{title ?? t('ph.upload')}</b>
       <label className="file-pick">
         <span className="btn btn-sm btn-outline-blue">{t('ph.pick')}</span>
-        <input ref={inputRef} type="file" multiple accept={UPLOAD_LIMITS.photo.accept} disabled={busy}
+        <input type="file" multiple accept={UPLOAD_LIMITS.photo.accept} disabled={busy}
           onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
       </label>
       {rejected.map((r) => <p key={r} className="error-text">{r}</p>)}

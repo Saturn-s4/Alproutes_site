@@ -234,7 +234,7 @@ class PhotoRepository(
         return photos.map { it.copy(topoLines = lines[it.id].orEmpty()) }
     }
 
-    fun insert(id: UUID, routeId: UUID, ascentId: UUID?, authorId: UUID, kind: PhotoKind, storageKey: String,
+    fun insert(id: UUID, routeId: UUID?, ascentId: UUID?, authorId: UUID, kind: PhotoKind, storageKey: String,
                contentType: String, caption: String?, captionLanguage: String?) {
         jdbc.update(
             """
@@ -245,6 +245,18 @@ class PhotoRepository(
                 uuid("id", id); uuid("routeId", routeId); uuid("ascent", ascentId); uuid("author", authorId)
                 str("kind", kind.wire); str("key", storageKey); str("ct", contentType); str("caption", caption); str("lang", captionLanguage)
             },
+        )
+    }
+
+    /** Gives the author's unattached photos to a route that is being created. */
+    fun attachToRoute(ids: List<UUID>, routeId: UUID, authorId: UUID) {
+        if (ids.isEmpty()) return
+        jdbc.update(
+            """
+            UPDATE photos SET route_id = :route, updated_at = now()
+             WHERE id IN (:ids) AND route_id IS NULL AND area_id IS NULL AND author_id = :author AND deleted_at IS NULL
+            """.trimIndent(),
+            params { uuids("ids", ids); uuid("route", routeId); uuid("author", authorId) },
         )
     }
 
@@ -308,17 +320,25 @@ class PhotoService(
     private val events: ApplicationEventPublisher,
     private val jdbc: NamedParameterJdbcTemplate,
 ) {
-    /** Returns the photo and whether it was created now (false = idempotent repeat). */
+    /**
+     * Returns the photo and whether it was created now (false = idempotent repeat).
+     * Without [routeId] the photo stays unattached until a new route takes it (see RouteService.create).
+     */
     @Transactional
-    fun createForRoute(routeId: UUID, req: PhotoCreate): Pair<Photo, Boolean> {
+    fun create(routeId: UUID?, req: PhotoCreate): Pair<Photo, Boolean> {
         val caller = Caller.current()
         users.requireActive(caller.userId)
-        val routeStatus = jdbc.query("SELECT status FROM routes WHERE id = :id", params { uuid("id", routeId) }) { rs, _ -> rs.getString(1) }
-            .firstOrNull()
-        if (routeStatus == null || (routeStatus == "hidden" && !caller.isModerator)) throw notFound("Маршрут не найден")
+        if (routeId != null) {
+            val routeStatus = jdbc.query("SELECT status FROM routes WHERE id = :id", params { uuid("id", routeId) }) { rs, _ -> rs.getString(1) }
+                .firstOrNull()
+            if (routeStatus == null || (routeStatus == "hidden" && !caller.isModerator)) throw notFound("Маршрут не найден")
+        } else if (req.ascentId != null) {
+            throw fieldError("ascentId", "Фото восхождения загружается к маршруту")
+        }
 
         photos.find(req.id)?.let { existing ->
-            if (existing.authorId == caller.userId && existing.photo.routeId == routeId) return existing.photo to false
+            // A repeat of POST /photos after the route took the photo is still the same request.
+            if (existing.authorId == caller.userId && (existing.photo.routeId == routeId || routeId == null)) return existing.photo to false
             throw conflict("conflict", "Объект с таким id уже существует")
         }
 
@@ -328,7 +348,7 @@ class PhotoService(
             req.captionLanguage?.let { check(LANG.matches(it), "captionLanguage", "Код языка ISO 639-1") }
             check(req.captionLanguage == null || req.caption != null, "captionLanguage", "Язык указывается вместе с подписью")
         }
-        if (req.ascentId != null) {
+        if (req.ascentId != null && routeId != null) {
             val ok = jdbc.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM ascents WHERE id = :a AND route_id = :r AND deleted_at IS NULL)",
                 params { uuid("a", req.ascentId); uuid("r", routeId) }, Boolean::class.java,
@@ -397,8 +417,9 @@ class PhotoService(
     private fun visibleRow(id: UUID, caller: Caller?): PhotoRow {
         val row = photos.find(id) ?: throw notFound("Фото не найдено")
         val own = caller != null && row.authorId == caller.userId
+        val attached = row.photo.routeId != null || row.photo.areaId != null
         val visible = !row.deleted && (own || caller?.isModerator == true ||
-            (row.visible && row.photo.processingStatus == ProcessingStatus.READY))
+            (attached && row.visible && row.photo.processingStatus == ProcessingStatus.READY))
         if (!visible) throw notFound("Фото не найдено")
         return row
     }
@@ -420,7 +441,13 @@ class PhotoController(private val service: PhotoService) {
 
     @PostMapping("/routes/{routeId}/photos")
     fun create(@PathVariable routeId: UUID, @RequestBody body: PhotoCreate): ResponseEntity<Photo> {
-        val (photo, created) = service.createForRoute(routeId, body)
+        val (photo, created) = service.create(routeId, body)
+        return ResponseEntity.status(if (created) HttpStatus.CREATED else HttpStatus.OK).body(photo)
+    }
+
+    @PostMapping("/photos")
+    fun createUnattached(@RequestBody body: PhotoCreate): ResponseEntity<Photo> {
+        val (photo, created) = service.create(null, body)
         return ResponseEntity.status(if (created) HttpStatus.CREATED else HttpStatus.OK).body(photo)
     }
 

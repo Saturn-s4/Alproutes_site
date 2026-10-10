@@ -8,6 +8,7 @@ import type { AreaSummary, Grade, LocalizedText, Photo, RouteContentPhoto, Route
 import { cleanText, errorsUnder, fieldErrors, intOrNull, newId, type FieldErrors } from '@/lib/edit';
 import { uploadFile } from '@/lib/upload';
 import { monthName, routeTypeLabel } from '@/lib/i18n';
+import { Documents } from '../Documents';
 import { PhotoUpload } from '../PhotoUpload';
 import { usePrefs } from '../Prefs';
 import { Field, GradesEditor, LocalizedInput, SignInFirst, AreaPicker } from './Fields';
@@ -280,17 +281,34 @@ export function RouteEditor({ target }: { target: Target }) {
         <Field label={t('route.description')} error={err('content.description')}>
           <LocalizedInput value={form.description} onChange={(v) => set('description', v)} multiline maxLength={100000} />
         </Field>
-        {target.kind === 'edit' ? (
-          <DescriptionPhotosField value={form.photos} onChange={(p) => set('photos', p)} photos={routePhotos} errors={err('content.photos')}
-            routeId={target.routeId} onUploaded={(p) => {
-              setRoutePhotos((xs) => [p, ...xs.filter((x) => x.id !== p.id)]);
-              // A new upload goes into the description right away; repeated callbacks (processing done) do not duplicate it.
-              setForm((f) => (f.photos.some((x) => x.photoId === p.id) ? f : { ...f, photos: [...f.photos, { photoId: p.id }] }));
-            }} />
-        ) : (
-          <p className="muted">{t('ed.photosAfterCreate')}</p>
-        )}
       </section>
+
+      <section className="form-section">
+        <h2 className="h2">{t('ed.photos')}</h2>
+        <PhotosField
+          value={form.photos}
+          onChange={(p) => set('photos', p)}
+          photos={routePhotos}
+          errors={err('content.photos')}
+          routeId={target.kind === 'edit' ? target.routeId : undefined}
+          onUploaded={(p) => {
+            setRoutePhotos((xs) => [p, ...xs.filter((x) => x.id !== p.id)]);
+            // A new upload goes into the description right away; the second callback (processing done) does not duplicate it.
+            setForm((f) => (f.photos.some((x) => x.photoId === p.id) ? f : {
+              ...f,
+              photos: [...f.photos, { photoId: p.id, caption: p.caption && p.captionLanguage ? { [p.captionLanguage]: p.caption } : undefined }],
+            }));
+          }}
+        />
+      </section>
+
+      {target.kind === 'edit' && (
+        <section className="form-section">
+          <h2 className="h2">{t('route.archive')}</h2>
+          <p className="field-hint">{t('ed.documentsHint')}</p>
+          <Documents routeId={target.routeId} documents={[]} withUpload />
+        </section>
+      )}
 
       <section className="form-section">
         <h2 className="h2">{t('route.map')}</h2>
@@ -343,22 +361,32 @@ export function RouteEditor({ target }: { target: Target }) {
   );
 }
 
-/** Which route photos are part of the description, in which order, with catalogue captions. */
-function DescriptionPhotosField({
+/**
+ * Photos of the description, in order, with catalogue captions; the first one is the cover.
+ * Editing a route: pick from the route photos or upload new ones to it.
+ * Creating one: uploads stay unattached until the route is saved and takes them.
+ */
+function PhotosField({
   value, onChange, photos, errors, routeId, onUploaded,
 }: {
   value: RouteContentPhoto[]; onChange: (v: RouteContentPhoto[]) => void; photos: Photo[]; errors: string[];
-  routeId: string; onUploaded: (p: Photo) => void;
+  routeId?: string; onUploaded: (p: Photo) => void;
 }) {
   const { t } = usePrefs();
   const byId = new Map(photos.map((p) => [p.id, p]));
   const available = photos.filter((p) => p.urls && !value.some((v) => v.photoId === p.id));
-  const move = (i: number, d: number) => {
-    const j = i + d;
-    if (j < 0 || j >= value.length) return;
+  const move = (i: number, to: number) => {
+    if (to < 0 || to >= value.length) return;
     const next = [...value];
-    [next[i], next[j]] = [next[j]!, next[i]!];
+    const [item] = next.splice(i, 1);
+    next.splice(to, 0, item!);
     onChange(next);
+  };
+  const remove = (i: number) => {
+    const ref = value[i]!;
+    onChange(value.filter((_, j) => j !== i));
+    // An unattached upload of a route being created is of no use once taken out: delete it.
+    if (!routeId) void api.DELETE('/photos/{photoId}', { params: { path: { photoId: ref.photoId } } });
   };
   return (
     <Field label={t('ed.descriptionPhotos')} hint={t('ed.descriptionPhotosHint')} error={errors}>
@@ -366,22 +394,27 @@ function DescriptionPhotosField({
         {value.map((ref, i) => {
           const p = byId.get(ref.photoId);
           return (
-            <div key={ref.photoId} className="dp-item">
-              {p?.urls ? <img src={p.urls.thumbnail} alt="" /> : <span className="row-thumb" />}
+            <div key={ref.photoId} className={`dp-item${i === 0 ? ' cover' : ''}`}>
+              <div className="dp-thumb">
+                {p?.urls ? <img src={p.urls.thumbnail} alt="" /> : <span className="row-thumb">{p ? t('ph.processingBadge') : ''}</span>}
+                {i === 0 && <span className="dp-cover">{t('ed.cover')}</span>}
+              </div>
               <div className="dp-fields">
                 <LocalizedInput value={ref.caption ?? {}} maxLength={1000}
                   onChange={(c) => onChange(value.map((x, j) => (j === i ? { ...x, caption: c } : x)))} />
                 <span className="muted">{p ? `${p.author.displayName}${p.caption ? ` · ${p.caption}` : ''}` : t('ed.photoUnavailable')}</span>
               </div>
               <div className="dp-actions">
-                <button type="button" className="btn btn-sm btn-ghost" onClick={() => move(i, -1)} aria-label={t('geo.up')}>↑</button>
-                <button type="button" className="btn btn-sm btn-ghost" onClick={() => move(i, 1)} aria-label={t('geo.down')}>↓</button>
-                <button type="button" className="btn btn-sm btn-ghost" onClick={() => onChange(value.filter((_, j) => j !== i))}>{t('geo.delete')}</button>
+                {i > 0 && <button type="button" className="btn btn-sm btn-outline-blue" onClick={() => move(i, 0)}>{t('ed.makeCover')}</button>}
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => move(i, i - 1)} disabled={i === 0} aria-label={t('geo.up')}>↑</button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => move(i, i + 1)} disabled={i === value.length - 1} aria-label={t('geo.down')}>↓</button>
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => remove(i)}>{t('geo.delete')}</button>
               </div>
             </div>
           );
         })}
       </div>
+      {value.length === 0 && <span className="muted">{t('ed.noDescriptionPhotos')}</span>}
       {available.length > 0 && (
         <>
           <span className="field-hint">{t('ed.addFromGallery')}</span>
@@ -395,9 +428,8 @@ function DescriptionPhotosField({
           </div>
         </>
       )}
-      {photos.length === 0 && <span className="muted">{t('ed.noRoutePhotos')}</span>}
       <PhotoUpload routeId={routeId} onAdded={onUploaded} title={t('ph.uploadToDescription')} />
-      <span className="field-hint">{t('ph.uploadToDescriptionHint')}</span>
+      <span className="field-hint">{routeId ? t('ph.uploadToDescriptionHint') : t('ph.uploadToNewRouteHint')}</span>
     </Field>
   );
 }

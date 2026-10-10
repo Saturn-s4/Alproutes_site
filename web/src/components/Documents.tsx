@@ -16,8 +16,11 @@ const CLAIMABLE: RightsStatus[] = ['unknown', 'public_domain', 'licensed', 'perm
  * Archival PDFs. The public only gets documents with a cleared rights status (the API filters);
  * the uploader and moderators also see the ones awaiting review, without the viewer.
  * The browser's own PDF viewer shows the file: the download endpoint redirects to a short-lived link.
+ * Uploading ([withUpload]) is part of route editing only, not of the public route page.
  */
-export function Documents({ routeId, documents: initial }: { routeId: string; documents: Document[] }) {
+export function Documents({
+  routeId, documents: initial, withUpload = false,
+}: { routeId: string; documents: Document[]; withUpload?: boolean }) {
   const { t, lang, session } = usePrefs();
   const [documents, setDocuments] = useState(initial);
   const [open, setOpen] = useState<string | null>(null);
@@ -78,10 +81,8 @@ export function Documents({ routeId, documents: initial }: { routeId: string; do
           </div>
         );
       })}
-      {session ? (
+      {withUpload && session && (
         <DocumentUpload routeId={routeId} onAdded={(d) => setDocuments((xs) => [d, ...xs.filter((x) => x.id !== d.id)])} />
-      ) : session === null && (
-        <p className="muted"><a href="/login">{t('header.signIn')}</a> — {t('doc.signInToUpload')}</p>
       )}
     </div>
   );

@@ -47,7 +47,7 @@ class RouteService(
         val caller = activeCaller()
         if (req.publish && !caller.isModerator) throw forbidden("Сразу публиковать могут только модераторы")
         validateSummary(req.changeSummary)
-        validator.validate(req.content, routeId = null)
+        validator.validate(req.content, routeId = null, authorId = caller.userId)
 
         val slug = if (req.slug != null) {
             validate {
@@ -63,6 +63,8 @@ class RouteService(
         val routeId = UUID.randomUUID()
         val revisionId = UUID.randomUUID()
         routes.insertRoute(routeId, slug, caller.userId)
+        // Before the revision: its photo rows must already belong to the route (route_revision_photos check).
+        photos.attachToRoute(req.content.photos.map { it.photoId }, routeId, caller.userId)
         routes.insertRevision(revisionId, routeId, 1, null, null, caller.userId, req.changeSummary, req.content)
         if (req.publish) {
             routes.publish(routeId, revisionId, null, caller.userId, null)
