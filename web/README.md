@@ -10,7 +10,23 @@ cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
 cd web && npm install && npm run dev
 ```
 
-Открыть `http://localhost:3000`. Вход — `/login` (dev-вход backend, без OAuth). Тестовые данные — `infra/dev-seed`.
+Открыть `http://localhost:3000`. Вход — `/login`: локально dev-вход backend, при настроенных ключах — Google и Apple (см. ниже). Тестовые данные — `infra/dev-seed`.
+
+## Вход через Google и Apple
+
+Браузер получает у провайдера ID token, backend проверяет его подпись по ключам провайдера (`POST /auth/oauth/{provider}`) и выдаёт свою пару токенов. Пароли AlpRoutes не хранит. Переменные — в `.env.example` (веб) и `application.yml` (backend); кнопка появляется, только когда задан её провайдер.
+
+**Google**
+1. Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID → тип **Web application**.
+2. Authorized JavaScript origins: `http://localhost:3000` и адрес продакшена. Redirect URI не нужен (всплывающее окно).
+3. Веб: `GOOGLE_CLIENT_ID=<id>`. Backend: `GOOGLE_CLIENT_IDS=<id>` (через запятую, если клиентов несколько — например, ещё Android).
+
+**Apple** (нужен платный Apple Developer Program)
+1. Certificates, Identifiers & Profiles → Identifiers → **Services IDs** → новый, включить Sign in with Apple.
+2. Configure: домен сайта и Return URL — `https://<домен>/login`. Apple не принимает `localhost` и http, поэтому локально кнопку Apple проверить нельзя — только на домене с HTTPS (или через туннель с HTTPS).
+3. Веб: `APPLE_CLIENT_ID=<Services ID>`, `APPLE_REDIRECT_URI=https://<домен>/login`. Backend: `APPLE_CLIENT_IDS=<Services ID>` (и bundle id iOS-приложения, если появится).
+
+Apple отдаёт имя пользователя только при первом входе — веб передаёт его в `displayName`. Почта может быть скрытой (`privaterelay.appleid.com`).
 
 ## Страницы
 
@@ -24,8 +40,8 @@ cd web && npm install && npm run dev
 | `/edit/routes/new`, `/edit/routes/[id]` | создание маршрута и правка (полный снимок ревизии) | клиент |
 | `/edit/areas/new`, `/edit/areas/[id]` | районы (модераторы) | клиент |
 | `/revisions/[id]` | ревизия: сравнение с базовой, одобрение / отклонение / откат | клиент |
-| `/moderation` | очередь правок и документов без проверки прав (модераторы) | клиент |
-| `/login` | dev-вход | клиент |
+| `/moderation` | очередь правок, прорисовок нитки и документов без проверки прав (модераторы) | клиент |
+| `/login` | вход через Google и Apple; dev-вход при разработке | сервер (настройки) + клиент |
 
 ## Как устроено
 
@@ -39,6 +55,7 @@ cd web && npm install && npm run dev
 - **Загрузка файлов** (`lib/upload.ts`) — по pre-signed URL прямо в S3, мимо backend; затем создаётся сущность с `uploadId`. Нужен CORS на хранилище для origin веба (SeaweedFS локально разрешает любой — в продакшене сузить).
 - **Треки.** Статистика и профиль высот — только с сервера (сглаженные). В браузере GPX/KML читается (`lib/gpx.ts`) лишь чтобы взять линию в маршрут до его создания; файл после создания маршрута загружается к нему как трек.
 - **Фото.** Фото описания (подписи из ревизии) и галерея участников (`inDescription=false`), полноэкранный просмотр — `Lightbox`. Картинки берутся напрямую из публичного бакета.
+- **Нитка на фото** (`components/edit/TopoEditor.tsx`, `lib/topo.ts`) — свой редактор на SVG: штрих от руки прореживается до опорных точек (Douglas–Peucker), через них строится центростремительный сплайн Catmull–Rom — то же правило зафиксировано в контракте для Android. Сплошная или пунктир, тип линии, правка точек. Версии и модерация — как у ревизий маршрута.
 - **PDF** открываются встроенным просмотрщиком браузера в `iframe`: `/api/v1/documents/{id}/download` отвечает редиректом на временную ссылку. pdf.js понадобится для своего интерфейса просмотра (мобильные браузеры PDF в iframe показывают плохо).
 - **Данные не додумываются.** Пустое поле формы уходит как `null` («нет данных»), категория без выбранного значения не отправляется, категории всегда показываются с системой.
 - **Стили** перенесены из `web-prototype/src/styles` (варианты A и B).
@@ -52,6 +69,8 @@ cd web && npm install && npm run dev
 | `openapi-fetch` | типизированный fetch по сгенерированным типам, ~6 КБ |
 | `openapi-typescript` (dev) | генерация типов из контракта |
 
+Внешние скрипты (не npm, грузятся только на `/login` и только при настроенном провайдере): Google Identity Services (`accounts.google.com/gsi/client`) и Sign in with Apple JS (`appleid.cdn-apple.com`) — официальные клиенты провайдеров, без них ID token в браузере не получить.
+
 ## Не сделано
 
-Загрузка фото и PDF из веба, редактор нитки на фото, восхождения, комментарии, жалобы, OAuth-вход, перетаскивание на карте пальцем (только мышь).
+Отметки станций и подписи участков в редакторе нитки, восхождения, комментарии, жалобы, перетаскивание на карте пальцем (только мышь).
