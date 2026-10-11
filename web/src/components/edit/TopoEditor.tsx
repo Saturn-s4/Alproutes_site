@@ -25,7 +25,7 @@ const MAX_PATHS = 20;
  */
 export function TopoEditor({
   photo, initial, onSave, onClose,
-}: { photo: Photo; initial: TopoDrawing | null; onSave: (d: TopoDrawing | null) => void; onClose: () => void }) {
+}: { photo: Photo; initial: TopoDrawing | null; onSave: (d: TopoDrawing) => void; onClose: () => void }) {
   const { t, lang } = usePrefs();
   const w = photo.widthPx ?? 1;
   const h = photo.heightPx ?? 1;
@@ -185,7 +185,8 @@ export function TopoEditor({
     commit((ps) => ps.map((x) => (x.id === path.id ? { ...x, points } : x)));
   };
 
-  const save = () => onSave(paths.length ? { formatVersion: 1, paths, ...extras } : null);
+  // No lines left is a drawing too: it removes the line from the photo (contract TopoDrawing.paths).
+  const save = () => onSave({ formatVersion: 1, paths, ...extras });
   const handle = 6 * scale();
 
   return (

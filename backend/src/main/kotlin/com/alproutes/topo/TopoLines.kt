@@ -69,7 +69,8 @@ private val MARKER_KINDS = setOf("belay", "crux", "bivouac", "rappel", "key_poin
 /** Mirrors the contract limits; the stored JSON is re-serialized from these classes, so unknown keys are dropped. */
 internal fun validateDrawing(d: TopoDrawing) = validate {
     check(d.formatVersion == 1, "drawing.formatVersion", "Поддерживается только версия 1")
-    check(d.paths.size in 1..20, "drawing.paths", "От 1 до 20 линий")
+    // An empty list is a valid version: it removes the line from this photo.
+    check(d.paths.size <= 20, "drawing.paths", "Не больше 20 линий")
     val ids = mutableSetOf<String>()
     d.paths.forEachIndexed { i, p ->
         val f = "drawing.paths[$i]"

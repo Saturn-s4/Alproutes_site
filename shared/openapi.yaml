@@ -2478,8 +2478,11 @@ components:
           description: Версия формата. Клиент, не знающий версию, показывает фото без рисунка.
         paths:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 20
+          description: |
+            Пустой список — на этом фото нитки маршрута нет: так новой версией убирают прорисовку
+            (история сохраняется, откат возможен). Клиенты такую версию не рисуют.
           items: { $ref: '#/components/schemas/TopoPath' }
         markers:
           type: array

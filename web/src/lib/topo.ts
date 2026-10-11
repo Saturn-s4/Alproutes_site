@@ -95,7 +95,8 @@ export function segmentDistance(p: Pt, a: Pt, b: Pt): number {
   return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
 }
 
-/** The current drawing of [routeId] on a photo, if there is one. */
+/** The current drawing of [routeId] on a photo; an empty current version means the line was removed. */
 export function currentTopo(photo: { topoLines: TopoLine[] }, routeId: string | undefined): TopoLine | undefined {
-  return routeId ? photo.topoLines.find((l) => l.routeId === routeId && l.isCurrent) : undefined;
+  const line = routeId ? photo.topoLines.find((l) => l.routeId === routeId && l.isCurrent) : undefined;
+  return line && line.drawing.paths.length > 0 ? line : undefined;
 }

@@ -247,6 +247,14 @@ class MediaTest : IntegrationTest() {
 
         assertEquals(listOf(3, 1), get(versions).expect(200).json["items"].map { it["version"].asInt() })
         assertEquals(listOf(v3["id"].asText()), get("/photos/$photoId").expect(200).json["topoLines"].map { it["id"].asText() })
+
+        // An empty drawing is a version too: it removes the line, and the history keeps it.
+        val removed = post(versions, mod, mapOf("baseVersionId" to v3["id"], "publish" to true,
+            "drawing" to mapOf("formatVersion" to 1, "paths" to emptyList<Any>()))).expect(201).json
+        val current = get("/photos/$photoId").expect(200).json["topoLines"].single()
+        assertEquals(removed["id"].asText(), current["id"].asText())
+        assertEquals(0, current["drawing"]["paths"].size())
+        assertEquals(listOf(4, 3, 1), get(versions).expect(200).json["items"].map { it["version"].asInt() })
     }
 
     // --------------------------------------------------------------- documents

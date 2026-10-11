@@ -179,7 +179,7 @@ function TopoReview({ item, onDone }: { item: PendingTopo; onDone: () => void })
         <span className="muted"> · {t('mod.topoVersion')} {line.version} · {line.author.displayName} · {formatDate(line.createdAt, lang)}</span>
       </div>
       <div className="topo-review">
-        {view(line, t('mod.topoProposed'))}
+        {view(line, line.drawing.paths.length ? t('mod.topoProposed') : t('mod.topoRemoval'))}
         {current && view(current, `${t('mod.topoCurrent')} (${current.version})`)}
       </div>
       <input className="input" maxLength={2000} placeholder={t('mod.topoNote')} value={note} onChange={(e) => setNote(e.target.value)} />

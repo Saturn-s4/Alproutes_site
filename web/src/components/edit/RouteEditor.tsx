@@ -411,11 +411,9 @@ function PhotosField({
 }) {
   const { t } = usePrefs();
   const [drawing, setDrawing] = useState<{ photo: Photo; edit: TopoEdit } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   /** The base of a new version: the current approved one, or the latest one while none is approved. */
   const openTopo = async (p: Photo) => {
-    setNotice(null);
     const known = topo[p.id];
     if (known) { setDrawing({ photo: p, edit: known }); return; }
     if (!routeId) { setDrawing({ photo: p, edit: { drawing: null, baseVersionId: null, dirty: false, pending: false } }); return; }
@@ -474,9 +472,11 @@ function PhotosField({
                     <button type="button" className="btn btn-sm btn-outline-blue" disabled={!p.urls || !p.widthPx || !canDraw(p)}
                       title={!p.urls ? t('topo.notReady') : !canDraw(p) ? t('topo.cantEdit') : undefined}
                       onClick={() => void openTopo(p)}>
-                      {topo[p.id]?.drawing || currentTopo(p, routeId) ? t('topo.editButton') : t('topo.drawButton')}
+                      {topo[p.id]?.drawing?.paths.length || currentTopo(p, routeId) ? t('topo.editButton') : t('topo.drawButton')}
                     </button>
-                    {topo[p.id]?.dirty && <span className="field-hint">{t('topo.changed')}</span>}
+                    {topo[p.id]?.dirty && (
+                      <span className="field-hint">{topo[p.id]?.drawing?.paths.length ? t('topo.changed') : t('topo.removed')}</span>
+                    )}
                     {!topo[p.id]?.dirty && topo[p.id]?.pending && <span className="field-hint">{t('topo.pendingNote')}</span>}
                   </div>
                 )}
@@ -505,7 +505,6 @@ function PhotosField({
           </div>
         </>
       )}
-      {notice && <span className="field-error">{notice}</span>}
       <PhotoUpload routeId={routeId} onAdded={onUploaded} title={t('ph.uploadToDescription')} />
       {drawing && (
         <TopoEditor
@@ -513,8 +512,9 @@ function PhotosField({
           initial={drawing.edit.drawing}
           onClose={() => setDrawing(null)}
           onSave={(d) => {
-            if (!d) setNotice(t('topo.emptyNotSaved'));
-            else onTopo(drawing.photo.id, { ...drawing.edit, drawing: d, dirty: true });
+            const hadLine = !!drawing.edit.drawing?.paths.length || !!currentTopo(drawing.photo, routeId);
+            // Nothing drawn and nothing to remove: no version to send.
+            if (d.paths.length || hadLine) onTopo(drawing.photo.id, { ...drawing.edit, drawing: d, dirty: true });
             setDrawing(null);
           }}
         />
