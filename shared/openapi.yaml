@@ -1284,6 +1284,9 @@ paths:
       tags: [comments]
       operationId: listRouteComments
       summary: Комментарии к маршруту
+      description: |
+        Плоский список по времени создания (старые сверху); ответы клиент группирует по `parentId`.
+        Скрытые модератором видят только модераторы, удалённые остаются заглушками.
       security: [{}, { bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/Cursor'
@@ -1371,8 +1374,10 @@ paths:
     delete:
       tags: [comments]
       operationId: deleteComment
-      summary: Удалить комментарий (автор)
-      description: В ветке остаётся заглушка `isDeleted = true` без текста, чтобы не рвать ответы.
+      summary: Удалить комментарий (автор или модератор)
+      description: |
+        В ветке остаётся заглушка `isDeleted = true` без текста, чтобы не рвать ответы.
+        Фото комментария удаляются вместе с ним (и из галереи маршрута).
       responses:
         '204': { description: Удалено }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2369,6 +2374,7 @@ components:
         routeId: { type: string, format: uuid, nullable: true }
         areaId: { type: string, format: uuid, nullable: true }
         ascentId: { type: string, format: uuid, nullable: true }
+        commentId: { type: string, format: uuid, nullable: true, description: Комментарий, к которому прикреплено фото }
         author: { $ref: '#/components/schemas/UserPublic' }
         kind: { $ref: '#/components/schemas/PhotoKind' }
         widthPx: { type: integer, nullable: true, description: С учётом EXIF-ориентации }
@@ -2740,12 +2746,19 @@ components:
         parentId: { type: string, format: uuid, nullable: true }
         body: { type: string, nullable: true, description: null у удалённого комментария }
         language: { $ref: '#/components/schemas/LanguageCode' }
+        photos:
+          type: array
+          description: |
+            Фото комментария в порядке прикрепления. Чужие — только готовые и не скрытые, свои — в любом
+            статусе. У удалённого комментария пусто. Те же фото есть в галерее маршрута.
+          items: { $ref: '#/components/schemas/Photo' }
         isDeleted: { type: boolean }
         createdAt: { type: string, format: date-time }
         editedAt: { type: string, format: date-time, nullable: true }
     CommentCreate:
       type: object
       required: [id, body]
+      description: Текст обязателен и при фото — подпись к ним.
       properties:
         id: { type: string, format: uuid, description: Генерируется клиентом }
         body: { type: string, minLength: 1, maxLength: 5000 }
@@ -2754,6 +2767,15 @@ components:
           format: uuid
           description: Ответ на комментарий верхнего уровня того же объекта (один уровень вложенности)
         language: { $ref: '#/components/schemas/LanguageCode' }
+        photoIds:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Фото к комментарию маршрута: свои, заранее загруженные к этому же маршруту
+            (`POST /routes/{routeId}/photos`) и ещё не прикреплённые к другому комментарию.
+            Для комментария к восхождению не поддерживается.
+          items: { type: string, format: uuid }
     CommentUpdate:
       type: object
       required: [body]

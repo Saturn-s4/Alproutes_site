@@ -82,6 +82,7 @@ data class Photo(
     val routeId: UUID?,
     val areaId: UUID?,
     val ascentId: UUID?,
+    val commentId: UUID?,
     val author: UserPublic,
     val kind: PhotoKind,
     val widthPx: Int?,
@@ -124,7 +125,7 @@ class PhotoRepository(
     private val storage: MediaStorage,
 ) {
     private val columns = """
-        p.id, p.route_id, p.area_id, p.ascent_id, p.kind, p.width_px, p.height_px, p.taken_at,
+        p.id, p.route_id, p.area_id, p.ascent_id, p.comment_id, p.kind, p.width_px, p.height_px, p.taken_at,
         ST_X(p.location) AS lon, ST_Y(p.location) AS lat, p.caption, p.caption_language, p.processing_status,
         p.visibility, p.deleted_at IS NOT NULL AS deleted, p.created_at, p.created_at::text AS created_at_text, p.updated_at,
         u.id AS author_id, u.display_name AS author_name
@@ -142,6 +143,7 @@ class PhotoRepository(
             routeId = rs.uuidOrNull("route_id"),
             areaId = rs.uuidOrNull("area_id"),
             ascentId = rs.uuidOrNull("ascent_id"),
+            commentId = rs.uuidOrNull("comment_id"),
             author = UserPublic(rs.uuid("author_id"), rs.getString("author_name"), null),
             kind = wireOf(rs.getString("kind")),
             widthPx = rs.intOrNull("width_px"),
@@ -246,6 +248,44 @@ class PhotoRepository(
                 str("kind", kind.wire); str("key", storageKey); str("ct", contentType); str("caption", caption); str("lang", captionLanguage)
             },
         )
+    }
+
+    /**
+     * Photos of the given comments in attach order (creation time). Others' photos only when ready
+     * and visible; the caller's own in any status; hidden ones for moderators.
+     */
+    fun forComments(commentIds: Collection<UUID>, callerId: UUID?, moderator: Boolean): Map<UUID, List<Photo>> {
+        if (commentIds.isEmpty()) return emptyMap()
+        val where = mutableListOf("p.comment_id IN (:ids)", "p.deleted_at IS NULL")
+        where += if (callerId != null) "(p.processing_status = 'ready' OR p.author_id = CAST(:caller AS uuid))" else "p.processing_status = 'ready'"
+        if (!moderator) where += if (callerId != null) "(p.visibility = 'visible' OR p.author_id = CAST(:caller AS uuid))" else "p.visibility = 'visible'"
+        val rows = jdbc.query(
+            "SELECT $columns $from WHERE ${where.joinToString(" AND ")} ORDER BY p.created_at, p.id",
+            params { uuids("ids", commentIds); uuid("caller", callerId) },
+        ) { rs, _ -> row(rs).photo }
+        return withTopoLines(rows).groupBy { it.commentId!! }
+    }
+
+    /**
+     * Attaches the author's own photos of [routeId] that belong to no comment yet; returns the ids
+     * that could not be attached (wrong owner, other route, already attached, deleted or failed).
+     */
+    fun attachToComment(ids: List<UUID>, commentId: UUID, routeId: UUID, authorId: UUID): List<UUID> {
+        if (ids.isEmpty()) return emptyList()
+        val attached = jdbc.query(
+            """
+            UPDATE photos SET comment_id = :comment
+             WHERE id IN (:ids) AND route_id = :route AND author_id = :author AND comment_id IS NULL
+               AND deleted_at IS NULL AND processing_status <> 'failed'
+            RETURNING id
+            """.trimIndent(),
+            params { uuids("ids", ids); uuid("comment", commentId); uuid("route", routeId); uuid("author", authorId) },
+        ) { rs, _ -> rs.uuid("id") }.toSet()
+        return ids.filter { it !in attached }
+    }
+
+    fun softDeleteByComment(commentId: UUID) {
+        jdbc.update("UPDATE photos SET deleted_at = now() WHERE comment_id = :c AND deleted_at IS NULL", params { uuid("c", commentId) })
     }
 
     /** Gives the author's unattached photos to a route that is being created. */

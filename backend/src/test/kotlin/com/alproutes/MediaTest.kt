@@ -260,6 +260,59 @@ class MediaTest : IntegrationTest() {
         assertEquals(listOf(4, 3, 1), get(versions).expect(200).json["items"].map { it["version"].asInt() })
     }
 
+    // ---------------------------------------------------------------- comments
+
+    @Test
+    fun `route comments carry the author's photos and take them along when deleted`() {
+        val user = token()
+        val other = token()
+        val routeId = publishedRoute()
+        val comments = "/routes/$routeId/comments"
+        val p1 = readyPhoto(user, routeId)
+        val p2 = readyPhoto(user, routeId)
+        val foreign = readyPhoto(other, routeId)
+
+        // Only one's own photos of this route.
+        val c1 = UUID.randomUUID()
+        val stolen = post(comments, user, mapOf("id" to c1, "body" to "Чужое фото (тест)", "photoIds" to listOf(foreign))).expect(400)
+        assertEquals("photoIds[0]", stolen.json["errors"][0]["field"].asText())
+        post(comments, user, mapOf("id" to c1, "body" to "   ")).expect(400)
+
+        val created = post(comments, user, mapOf("id" to c1, "body" to " Были вчера, лёд хороший (тест) ", "language" to "ru",
+            "photoIds" to listOf(p1, p2))).expect(201).json
+        assertEquals("Были вчера, лёд хороший (тест)", created["body"].asText())
+        assertEquals(listOf(p1, p2), created["photos"].map { it["id"].asText() })
+        assertEquals(c1.toString(), get("/photos/$p1").expect(200).json["commentId"].asText())
+        // A retry of the same request is the same comment.
+        post(comments, user, mapOf("id" to c1, "body" to "Были вчера, лёд хороший (тест)", "photoIds" to listOf(p1, p2))).expect(200)
+
+        // A photo belongs to one comment; the failed comment is not saved at all.
+        post(comments, user, mapOf("id" to UUID.randomUUID(), "body" to "Ещё раз (тест)", "photoIds" to listOf(p1))).expect(400)
+        assertEquals(1, get(comments).expect(200).json["items"].size())
+
+        // One level of replies.
+        val reply = post(comments, other, mapOf("id" to UUID.randomUUID(), "body" to "Спасибо (тест)", "parentId" to c1)).expect(201).json
+        post(comments, user, mapOf("id" to UUID.randomUUID(), "body" to "Ответ на ответ (тест)", "parentId" to reply["id"])).expect(400)
+
+        val list = get(comments).expect(200).json["items"]
+        assertEquals(listOf(c1.toString(), reply["id"].asText()), list.map { it["id"].asText() })
+        assertEquals(2, list[0]["photos"].size())
+        assertEquals(c1.toString(), list[1]["parentId"].asText())
+
+        patch("/comments/$c1", other, mapOf("body" to "Подмена (тест)")).expect(403)
+        assertNotNull(patch("/comments/$c1", user, mapOf("body" to "Были вчера (тест)")).expect(200).json["editedAt"].textValue())
+
+        delete("/comments/$c1", other).expect(403)
+        delete("/comments/$c1", user).expect(204)
+        val after = get(comments).expect(200).json["items"]
+        assertTrue(after[0]["isDeleted"].asBoolean())
+        assertTrue(after[0]["body"].isNull)
+        assertEquals(0, after[0]["photos"].size())
+        assertEquals(reply["id"].asText(), after[1]["id"].asText())
+        get("/photos/$p1").expect(404)
+        assertEquals(listOf(foreign), photoIds(get("/routes/$routeId/photos?inDescription=false").expect(200).json))
+    }
+
     // ------------------------------------------------------------- maintenance
 
     @Test
