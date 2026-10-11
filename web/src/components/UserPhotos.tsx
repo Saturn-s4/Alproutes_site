@@ -7,16 +7,20 @@ import type { Photo } from '@/lib/api/types';
 import { formatDate, photoKindLabel } from '@/lib/i18n';
 import { PhotoTopo } from './DescriptionPhotos';
 import { Lightbox, type LightboxItem } from './Lightbox';
-import { PhotoUpload } from './PhotoUpload';
 import { usePrefs } from './Prefs';
 
 const PAGE = 24;
 
-/** Participants' photos: everything of the route that is not in the description. */
+/**
+ * Participants' photos: everything of the route that is not in the description. They are added
+ * through comments; here they are shown together.
+ */
 export function UserPhotos({ routeId, initial, nextCursor }: { routeId: string; initial: Photo[]; nextCursor: string | null }) {
   const { t, lang, session } = usePrefs();
   const router = useRouter();
   const [photos, setPhotos] = useState(initial);
+  // A new comment with photos refreshes the server render (new [initial]); anonymous visitors take it as is.
+  useEffect(() => { if (!session?.user.id) setPhotos(initial); }, [initial, session?.user.id]);
   const [cursor, setCursor] = useState(nextCursor);
   const [open, setOpen] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,7 +31,8 @@ export function UserPhotos({ routeId, initial, nextCursor }: { routeId: string; 
     if (!me) return;
     void api.GET('/routes/{routeId}/photos', { params: { path: { routeId }, query: { inDescription: false, limit: PAGE } } })
       .then(({ data }) => { if (data) { setPhotos(data.items); setCursor(data.nextCursor ?? null); } });
-  }, [me, routeId]);
+    // [initial] changes when the page is refreshed after a comment with photos: re-read then too.
+  }, [me, routeId, initial]);
 
   const more = async () => {
     if (!cursor) return;
@@ -42,8 +47,6 @@ export function UserPhotos({ routeId, initial, nextCursor }: { routeId: string; 
       setCursor(data.nextCursor ?? null);
     }
   };
-
-  const added = (p: Photo) => setPhotos((xs) => [p, ...xs.filter((x) => x.id !== p.id)]);
 
   const remove = async (p: Photo) => {
     if (!window.confirm(t('ph.deleteConfirm'))) return;
@@ -102,9 +105,7 @@ export function UserPhotos({ routeId, initial, nextCursor }: { routeId: string; 
           {t('common.more')}
         </button>
       )}
-      {session ? <PhotoUpload routeId={routeId} onAdded={added} /> : session === null && (
-        <p className="muted"><a href="/login">{t('header.signIn')}</a> — {t('ph.signInToUpload')}</p>
-      )}
+      <p className="field-hint">{t('ph.viaComments')}</p>
       <Lightbox items={ready} index={open} onIndex={setOpen} routeId={routeId} />
     </>
   );

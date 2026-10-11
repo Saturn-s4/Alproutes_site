@@ -2737,7 +2737,7 @@ components:
     # ----------------------------------------------------------- comments
     Comment:
       type: object
-      required: [id, author, createdAt, isDeleted]
+      required: [id, author, photos, createdAt, isDeleted]
       properties:
         id: { type: string, format: uuid }
         author: { $ref: '#/components/schemas/UserPublic' }
