@@ -107,7 +107,7 @@ class MediaTest : IntegrationTest() {
         val otherRoute = post("/routes", mod, mapOf("content" to content(areaId), "publish" to true)).expect(201).json["routeId"].asText()
         val foreign = readyPhoto(user, otherRoute)
 
-        // A new route cannot reference photos: they are uploaded to an existing route.
+        // A new route cannot take photos of another route, only the author's unattached ones.
         post("/routes", mod, mapOf("content" to content(areaId, extra = mapOf("photos" to listOf(mapOf("photoId" to inDescription)))))).expect(400)
 
         val photos = listOf(mapOf("photoId" to inDescription, "caption" to mapOf("ru" to "Общий вид (тест)")))
@@ -148,6 +148,47 @@ class MediaTest : IntegrationTest() {
         val afterDelete = get("/routes/$routeId").expect(200).json
         assertEquals(1, afterDelete["photos"].size())
         assertEquals(0, afterDelete["descriptionPhotos"].size())
+    }
+
+    @Test
+    fun `new route takes the author's unattached photos into revision 1`() {
+        val user = token()
+        val other = token()
+        val areaId = createArea(token(UserRole.MODERATOR))
+
+        val cover = UUID.randomUUID()
+        val second = UUID.randomUUID()
+        for (id in listOf(cover, second)) {
+            val uploadId = upload(user, "photo", "image/png", png(64, 48))
+            post("/photos", user, mapOf("id" to id, "uploadId" to uploadId, "kind" to "overview")).expect(201)
+            awaitReady(id, user)
+        }
+        // Unattached: the author sees it, nobody else does; ascent photos need a route.
+        assertTrue(get("/photos/$cover", user).expect(200).json["routeId"].isNull)
+        get("/photos/$cover").expect(404)
+        get("/photos/$cover", other).expect(404)
+        post("/photos", user, mapOf("id" to UUID.randomUUID(), "uploadId" to UUID.randomUUID(), "kind" to "overview",
+            "ascentId" to UUID.randomUUID())).expect(400)
+
+        // Someone else cannot take them.
+        val photos = listOf(mapOf("photoId" to cover, "caption" to mapOf("ru" to "Титульное (тест)")), mapOf("photoId" to second))
+        val stolen = post("/routes", other, mapOf("content" to content(areaId, extra = mapOf("photos" to photos)))).expect(400)
+        assertEquals("content.photos[0].photoId", stolen.json["errors"][0]["field"].asText())
+
+        val created = post("/routes", user, mapOf("content" to content(areaId, extra = mapOf("photos" to photos)))).expect(201).json
+        val routeId = created["routeId"].asText()
+        assertEquals(routeId, get("/photos/$cover", user).expect(200).json["routeId"].asText())
+        assertEquals(listOf(cover.toString(), second.toString()),
+            get("/route-revisions/${created["id"].asText()}", user).expect(200).json["content"]["photos"].map { it["photoId"].asText() })
+
+        // Once attached, the photos cannot go into yet another new route; a repeated POST /photos is idempotent.
+        post("/routes", user, mapOf("content" to content(areaId, extra = mapOf("photos" to photos)))).expect(400)
+        post("/photos", user, mapOf("id" to cover, "uploadId" to UUID.randomUUID(), "kind" to "overview")).expect(200)
+
+        // After approval the first photo is the cover.
+        post("/route-revisions/${created["id"].asText()}/approve", token(UserRole.MODERATOR)).expect(200)
+        val summary = get("/routes?areaId=$areaId").expect(200).json["items"].first { it["id"].asText() == routeId }
+        assertTrue(summary["coverPhotoUrl"].asText().endsWith("/photos/$cover/thumbnail.jpg"))
     }
 
     // --------------------------------------------------------------- documents

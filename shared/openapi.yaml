@@ -769,6 +769,29 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /photos:
+    post:
+      tags: [photos]
+      operationId: createUnattachedPhoto
+      summary: Загрузить фото для маршрута, который ещё создаётся
+      description: |
+        Фото пока ни к чему не привязано (`routeId` и `areaId` — null) и видно только автору
+        и модераторам. Оно привязывается к маршруту, когда автор создаёт маршрут с этим фото
+        в `RouteContent.photos`. Так новый маршрут создаётся с фото одной ревизией — в том числе
+        из офлайн-очереди Android. Непривязанные фото со временем могут удаляться сервером.
+        `ascentId` здесь не допускается.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PhotoCreate' }
+      responses:
+        '200': { $ref: '#/components/responses/PhotoExisting' }
+        '201': { $ref: '#/components/responses/PhotoCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /photos/{photoId}:
     parameters:
       - $ref: '#/components/parameters/PhotoId'
@@ -2043,9 +2066,11 @@ components:
           description: |
             Фото, входящие в само описание, в порядке показа. Версионируются вместе с ревизией:
             правка набора фото — это новая ревизия, откат возвращает прежний набор.
-            Фото должно быть заранее загружено к этому же маршруту (`POST /routes/{routeId}/photos`),
-            поэтому у нового маршрута список пуст. Удалённые или скрытые потом фото остаются
-            в ревизии, но клиентам не показываются (см. `RouteDetail.descriptionPhotos`).
+            Фото должно быть заранее загружено к этому же маршруту (`POST /routes/{routeId}/photos`).
+            При создании маршрута (`POST /routes`) — только свои ещё не привязанные фото
+            (`POST /photos`): сервер привязывает их к новому маршруту в той же транзакции.
+            Первое фото — титульное (`RouteSummary.coverPhotoUrl`). Удалённые или скрытые потом фото
+            остаются в ревизии, но клиентам не показываются (см. `RouteDetail.descriptionPhotos`).
           maxItems: 30
           items: { $ref: '#/components/schemas/RouteContentPhoto' }
     RouteContentPhoto:

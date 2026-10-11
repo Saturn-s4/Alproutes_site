@@ -27,7 +27,8 @@ class RouteContentValidator(
     private val jdbc: NamedParameterJdbcTemplate,
 ) {
     /** [routeId] is null for a brand-new route (then GPX import is impossible: no tracks yet). */
-    fun validate(content: RouteContent, routeId: UUID?, prefix: String = "content") {
+    /** [authorId] matters for a new route only: its description may take the author's unattached photos. */
+    fun validate(content: RouteContent, routeId: UUID?, prefix: String = "content", authorId: UUID? = null) {
         val v = Validator()
         v.check(areas.exists(content.areaId), "$prefix.areaId", "Район не найден")
         v.localized(content.name, "$prefix.name", required = true, maxLength = 200)
@@ -61,7 +62,7 @@ class RouteContentValidator(
 
         v.check(content.features.size <= 50, "$prefix.features", "Не больше 50 объектов")
         content.features.forEachIndexed { i, f -> feature(v, f, "$prefix.features[$i]", routeId) }
-        photos(v, content.photos, "$prefix.photos", routeId)
+        photos(v, content.photos, "$prefix.photos", routeId, authorId)
         v.throwIfAny()
 
         // Checks whose failure is not a field format problem (409/400 with their own type).
@@ -88,23 +89,22 @@ class RouteContentValidator(
         v.localized(f.note, "$field.note", required = false, maxLength = 1000)
     }
 
-    private fun photos(v: Validator, photos: List<RouteContentPhoto>, field: String, routeId: UUID?) {
+    private fun photos(v: Validator, photos: List<RouteContentPhoto>, field: String, routeId: UUID?, authorId: UUID?) {
         if (photos.isEmpty()) return
-        if (routeId == null) {
-            v.error(field, "Фото добавляются в описание после создания маршрута: сначала их нужно загрузить к нему")
-            return
-        }
         v.check(photos.size <= 30, field, "Не больше 30 фото в описании")
+        // An existing route takes its own photos; a new one takes the author's unattached uploads (POST /photos).
+        val owner = if (routeId != null) "route_id = :route"
+            else "route_id IS NULL AND area_id IS NULL AND author_id = CAST(:author AS uuid)"
         val known = jdbc.query(
-            "SELECT id, processing_status FROM photos WHERE id IN (:ids) AND route_id = :route AND deleted_at IS NULL",
-            params { uuids("ids", photos.map { it.photoId }); uuid("route", routeId) },
+            "SELECT id, processing_status FROM photos WHERE id IN (:ids) AND $owner AND deleted_at IS NULL",
+            params { uuids("ids", photos.map { it.photoId }); uuid("route", routeId); uuid("author", authorId) },
         ) { rs, _ -> rs.uuid("id") to rs.getString("processing_status") }.toMap()
         val seen = mutableSetOf<UUID>()
         photos.forEachIndexed { i, ph ->
             val f = "$field[$i]"
             if (!seen.add(ph.photoId)) v.error("$f.photoId", "Фото указано дважды")
             when (known[ph.photoId]) {
-                null -> v.error("$f.photoId", "Фото этого маршрута не найдено")
+                null -> v.error("$f.photoId", if (routeId != null) "Фото этого маршрута не найдено" else "Фото не найдено среди ваших загрузок для нового маршрута")
                 "failed" -> v.error("$f.photoId", "Фото не удалось обработать")
             }
             v.localized(ph.caption, "$f.caption", required = false, maxLength = 1000)
