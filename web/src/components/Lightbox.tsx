@@ -2,12 +2,16 @@
 
 import { useCallback, useEffect } from 'react';
 import type { Photo } from '@/lib/api/types';
+import { currentTopo } from '@/lib/topo';
 import { usePrefs } from './Prefs';
+import { TopoOverlay } from './TopoOverlay';
 
 export type LightboxItem = { photo: Photo; caption: string | null };
 
-/** Full-screen photo viewer: Esc closes, arrow keys move between photos. */
-export function Lightbox({ items, index, onIndex }: { items: LightboxItem[]; index: number | null; onIndex: (i: number | null) => void }) {
+/** Full-screen photo viewer: Esc closes, arrow keys move between photos. Shows [routeId]'s line over a topo photo. */
+export function Lightbox({
+  items, index, onIndex, routeId,
+}: { items: LightboxItem[]; index: number | null; onIndex: (i: number | null) => void; routeId?: string }) {
   const { t } = usePrefs();
   const go = useCallback(
     (delta: number) => {
@@ -33,9 +37,15 @@ export function Lightbox({ items, index, onIndex }: { items: LightboxItem[]; ind
 
   const item = index != null ? items[index] : undefined;
   if (!item?.photo.urls) return null;
+  const topo = currentTopo(item.photo, routeId);
   return (
     <div className="lightbox" role="dialog" aria-modal="true" aria-label={item.caption ?? undefined} onClick={() => onIndex(null)}>
-      <img src={item.photo.urls.full} alt={item.caption ?? ''} onClick={(e) => e.stopPropagation()} />
+      <div className="topo-frame" onClick={(e) => e.stopPropagation()}>
+        <img src={item.photo.urls.full} alt={item.caption ?? ''} />
+        {topo && item.photo.widthPx && item.photo.heightPx && (
+          <TopoOverlay drawing={topo.drawing} width={item.photo.widthPx} height={item.photo.heightPx} strokeWidth={4} />
+        )}
+      </div>
       <div className="lightbox-bar" onClick={(e) => e.stopPropagation()}>
         <span className="cap">
           {item.caption}

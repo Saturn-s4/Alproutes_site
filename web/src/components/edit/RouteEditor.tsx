@@ -11,8 +11,11 @@ import { monthName, routeTypeLabel } from '@/lib/i18n';
 import { Documents } from '../Documents';
 import { PhotoUpload } from '../PhotoUpload';
 import { usePrefs } from '../Prefs';
+import { TopoOverlay } from '../TopoOverlay';
+import { currentTopo, type TopoDrawing } from '@/lib/topo';
 import { Field, GradesEditor, LocalizedInput, SignInFirst, AreaPicker } from './Fields';
 import { GeometryEditor } from './GeometryEditor';
+import { TopoEditor } from './TopoEditor';
 
 const ROUTE_TYPES: RouteType[] = ['rock', 'snow_ice', 'combined'];
 
@@ -32,6 +35,12 @@ type Form = {
   features: RouteFeature[];
   photos: RouteContentPhoto[];
 };
+
+/**
+ * A route line drawn on a description photo. Topo versions are separate from route revisions
+ * (contract proposeTopoLine), so they are sent after the route itself is saved.
+ */
+type TopoEdit = { drawing: TopoDrawing | null; baseVersionId: string | null; dirty: boolean; pending: boolean };
 
 const emptyForm: Form = {
   area: null, name: {}, description: {}, grades: [], routeType: null, isTraverse: null, elevationGainM: '', lengthM: '',
@@ -56,6 +65,7 @@ export function RouteEditor({ target }: { target: Target }) {
   const [busy, setBusy] = useState(false);
   /** New route only: GPX/KML files to upload as its tracks right after it is created. */
   const [pendingTracks, setPendingTracks] = useState<File[]>([]);
+  const [topo, setTopo] = useState<Record<string, TopoEdit>>({});
   const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -164,19 +174,20 @@ export function RouteEditor({ target }: { target: Target }) {
       const rev = res.data;
       // Tracks need the route to exist: upload the files picked in the form now.
       const failed: string[] = [];
+      failed.push(...(await saveTopo(rev.routeId)));
       for (const file of pendingTracks) {
         try {
           const uploadId = await uploadFile(file, 'track');
           const created = await api.POST('/routes/{routeId}/tracks', { params: { path: { routeId: rev.routeId } }, body: { id: newId(), uploadId } });
-          if (!created.data) failed.push(file.name);
+          if (!created.data) failed.push(`${t('trk.track')} ${file.name}`);
         } catch {
-          failed.push(file.name);
+          failed.push(`${t('trk.track')} ${file.name}`);
         }
       }
       setBusy(false);
       if (failed.length) {
         // The route itself is saved; say which files did not make it instead of losing them silently.
-        setMessage({ text: `${t('ed.tracksFailed')}: ${failed.join(', ')}`, link: `/revisions/${rev.id}` });
+        setMessage({ text: `${t('ed.savedWithErrors')}: ${failed.join('; ')}`, link: `/revisions/${rev.id}` });
         return;
       }
       if (rev.status === 'approved') {
@@ -196,6 +207,28 @@ export function RouteEditor({ target }: { target: Target }) {
     } else {
       setMessage({ text: problem?.detail ?? problem?.title ?? t('ed.saveFailed') });
     }
+  };
+
+  /** Proposes every changed drawing of a photo still in the description; returns what failed. */
+  const saveTopo = async (routeId: string): Promise<string[]> => {
+    const failed: string[] = [];
+    const publishNow = isModerator && publish;
+    for (const [photoId, edit] of Object.entries(topo)) {
+      if (!edit.dirty || !edit.drawing || !form.photos.some((x) => x.photoId === photoId)) continue;
+      const photo = routePhotos.find((x) => x.id === photoId);
+      const label = `${t('topo.title')} (${photo?.caption ?? photoId.slice(0, 8)})`;
+      // The contract draws on topo photos only: the author (or a moderator) switches the type first.
+      if (photo && photo.kind !== 'topo') {
+        const patched = await api.PATCH('/photos/{photoId}', { params: { path: { photoId } }, body: { kind: 'topo' } });
+        if (!patched.data) { failed.push(`${label}: ${patched.error?.detail ?? t('topo.failed')}`); continue; }
+      }
+      const res = await api.POST('/photos/{photoId}/topo-lines/{routeId}/versions', {
+        params: { path: { photoId, routeId } },
+        body: { baseVersionId: edit.baseVersionId, drawing: edit.drawing, publish: publishNow },
+      });
+      if (!res.data) failed.push(`${label}: ${res.error?.type === 'revision-conflict' ? t('topo.conflict') : res.error?.detail ?? t('topo.failed')}`);
+    }
+    return failed;
   };
 
   const center = form.area?.center?.coordinates as [number, number] | undefined;
@@ -291,6 +324,9 @@ export function RouteEditor({ target }: { target: Target }) {
           photos={routePhotos}
           errors={err('content.photos')}
           routeId={target.kind === 'edit' ? target.routeId : undefined}
+          topo={topo}
+          onTopo={(photoId, edit) => setTopo((x) => ({ ...x, [photoId]: edit }))}
+          canDraw={(p) => p.kind === 'topo' || p.author.id === session.user.id || isModerator}
           onUploaded={(p) => {
             setRoutePhotos((xs) => [p, ...xs.filter((x) => x.id !== p.id)]);
             // A new upload goes into the description right away; the second callback (processing done) does not duplicate it.
@@ -367,12 +403,36 @@ export function RouteEditor({ target }: { target: Target }) {
  * Creating one: uploads stay unattached until the route is saved and takes them.
  */
 function PhotosField({
-  value, onChange, photos, errors, routeId, onUploaded,
+  value, onChange, photos, errors, routeId, onUploaded, topo, onTopo, canDraw,
 }: {
   value: RouteContentPhoto[]; onChange: (v: RouteContentPhoto[]) => void; photos: Photo[]; errors: string[];
   routeId?: string; onUploaded: (p: Photo) => void;
+  topo: Record<string, TopoEdit>; onTopo: (photoId: string, edit: TopoEdit) => void; canDraw: (p: Photo) => boolean;
 }) {
   const { t } = usePrefs();
+  const [drawing, setDrawing] = useState<{ photo: Photo; edit: TopoEdit } | null>(null);
+
+  /** The base of a new version: the current approved one, or the latest one while none is approved. */
+  const openTopo = async (p: Photo) => {
+    const known = topo[p.id];
+    if (known) { setDrawing({ photo: p, edit: known }); return; }
+    if (!routeId) { setDrawing({ photo: p, edit: { drawing: null, baseVersionId: null, dirty: false, pending: false } }); return; }
+    const { data } = await api.GET('/photos/{photoId}/topo-lines/{routeId}/versions', { params: { path: { photoId: p.id, routeId }, query: { limit: 20 } } });
+    const items = data?.items ?? [];
+    const current = items.find((x) => x.isCurrent);
+    const latest = items[0];
+    // The server expects the current version as the base, or the latest one while none is approved.
+    const base = current ?? latest;
+    setDrawing({
+      photo: p,
+      edit: {
+        drawing: current?.drawing ?? latest?.drawing ?? null,
+        baseVersionId: base?.id ?? null,
+        dirty: false,
+        pending: !!latest && latest.status === 'pending',
+      },
+    });
+  };
   const byId = new Map(photos.map((p) => [p.id, p]));
   const available = photos.filter((p) => p.urls && !value.some((v) => v.photoId === p.id));
   const move = (i: number, to: number) => {
@@ -397,12 +457,29 @@ function PhotosField({
             <div key={ref.photoId} className={`dp-item${i === 0 ? ' cover' : ''}`}>
               <div className="dp-thumb">
                 {p?.urls ? <img src={p.urls.thumbnail} alt="" /> : <span className="row-thumb">{p ? t('ph.processingBadge') : ''}</span>}
+                {p?.urls && p.widthPx && p.heightPx && (() => {
+                  const d = topo[p.id]?.drawing ?? currentTopo(p, routeId)?.drawing;
+                  return d ? <TopoOverlay drawing={d} width={p.widthPx} height={p.heightPx} strokeWidth={2} cover /> : null;
+                })()}
                 {i === 0 && <span className="dp-cover">{t('ed.cover')}</span>}
               </div>
               <div className="dp-fields">
                 <LocalizedInput value={ref.caption ?? {}} maxLength={1000}
                   onChange={(c) => onChange(value.map((x, j) => (j === i ? { ...x, caption: c } : x)))} />
                 <span className="muted">{p ? `${p.author.displayName}${p.caption ? ` · ${p.caption}` : ''}` : t('ed.photoUnavailable')}</span>
+                {p && (
+                  <div className="dp-topo">
+                    <button type="button" className="btn btn-sm btn-outline-blue" disabled={!p.urls || !p.widthPx || !canDraw(p)}
+                      title={!p.urls ? t('topo.notReady') : !canDraw(p) ? t('topo.cantEdit') : undefined}
+                      onClick={() => void openTopo(p)}>
+                      {topo[p.id]?.drawing?.paths.length || currentTopo(p, routeId) ? t('topo.editButton') : t('topo.drawButton')}
+                    </button>
+                    {topo[p.id]?.dirty && (
+                      <span className="field-hint">{topo[p.id]?.drawing?.paths.length ? t('topo.changed') : t('topo.removed')}</span>
+                    )}
+                    {!topo[p.id]?.dirty && topo[p.id]?.pending && <span className="field-hint">{t('topo.pendingNote')}</span>}
+                  </div>
+                )}
               </div>
               <div className="dp-actions">
                 {i > 0 && <button type="button" className="btn btn-sm btn-outline-blue" onClick={() => move(i, 0)}>{t('ed.makeCover')}</button>}
@@ -429,6 +506,19 @@ function PhotosField({
         </>
       )}
       <PhotoUpload routeId={routeId} onAdded={onUploaded} title={t('ph.uploadToDescription')} />
+      {drawing && (
+        <TopoEditor
+          photo={drawing.photo}
+          initial={drawing.edit.drawing}
+          onClose={() => setDrawing(null)}
+          onSave={(d) => {
+            const hadLine = !!drawing.edit.drawing?.paths.length || !!currentTopo(drawing.photo, routeId);
+            // Nothing drawn and nothing to remove: no version to send.
+            if (d.paths.length || hadLine) onTopo(drawing.photo.id, { ...drawing.edit, drawing: d, dirty: true });
+            setDrawing(null);
+          }}
+        />
+      )}
       <span className="field-hint">{routeId ? t('ph.uploadToDescriptionHint') : t('ph.uploadToNewRouteHint')}</span>
     </Field>
   );

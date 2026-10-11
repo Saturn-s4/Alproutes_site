@@ -49,3 +49,9 @@ alproutes:
     public-bucket: ${S3_PUBLIC_BUCKET:alproutes-public}
     public-base-url: ${S3_PUBLIC_BASE_URL:http://localhost:9000/alproutes-public}
     download-url-ttl: 10m
+  maintenance:
+    # Daily cleanup: expired upload slots, unattached photos, duplicate documents. Server time zone.
+    enabled: ${MAINTENANCE_ENABLED:true}
+    cron: ${MAINTENANCE_CRON:0 30 3 * * *}
+    unattached-photo-ttl: 7d
+    duplicate-document-window: 3d

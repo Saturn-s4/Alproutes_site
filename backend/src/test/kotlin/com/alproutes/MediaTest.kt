@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -25,6 +26,8 @@ import javax.imageio.ImageIO
 
 class MediaTest : IntegrationTest() {
     @Autowired lateinit var s3: S3Client
+    @Autowired lateinit var maintenance: com.alproutes.maintenance.MaintenanceJob
+    @Autowired lateinit var storage: com.alproutes.media.MediaStorage
 
     private val http = HttpClient.newHttpClient()
 
@@ -189,6 +192,119 @@ class MediaTest : IntegrationTest() {
         post("/route-revisions/${created["id"].asText()}/approve", token(UserRole.MODERATOR)).expect(200)
         val summary = get("/routes?areaId=$areaId").expect(200).json["items"].first { it["id"].asText() == routeId }
         assertTrue(summary["coverPhotoUrl"].asText().endsWith("/photos/$cover/thumbnail.jpg"))
+    }
+
+    // -------------------------------------------------------------------- topo
+
+    @Test
+    fun `topo line versions are moderated like route revisions`() {
+        val mod = token(UserRole.MODERATOR)
+        val user = token()
+        val routeId = post("/routes", mod, mapOf("content" to content(createArea(mod)), "publish" to true)).expect(201).json["routeId"].asText()
+        val photoId = readyPhoto(user, routeId)
+        val versions = "/photos/$photoId/topo-lines/$routeId/versions"
+        fun drawing(x: Double = 0.2, dashed: Boolean = false) = mapOf(
+            "formatVersion" to 1,
+            "paths" to listOf(mapOf("id" to "p1", "style" to "main", "dashed" to dashed,
+                "points" to listOf(mapOf("x" to x, "y" to 0.9), mapOf("x" to 0.5, "y" to 0.5), mapOf("x" to 0.6, "y" to 0.1)))),
+            "labels" to listOf(mapOf("x" to 0.5, "y" to 0.5, "text" to "Ключ (тест)", "pathId" to "p1")),
+        )
+
+        // Only a topo photo takes a drawing; the author switches the type.
+        post(versions, user, mapOf("drawing" to drawing())).expect(409)
+        patch("/photos/$photoId", user, mapOf("kind" to "topo")).expect(200)
+
+        val bad = post(versions, user, mapOf("drawing" to drawing(x = 1.5))).expect(400)
+        assertEquals("drawing.paths[0].points[0]", bad.json["errors"][0]["field"].asText())
+        post(versions, user, mapOf("drawing" to drawing(), "publish" to true)).expect(403)
+
+        val v1 = post(versions, user, mapOf("drawing" to drawing(dashed = true))).expect(201).json
+        assertEquals(1, v1["version"].asInt())
+        assertEquals("pending", v1["status"].asText())
+        assertTrue(v1["drawing"]["paths"][0]["dashed"].asBoolean())
+        assertTrue(v1["drawing"]["paths"][0]["smooth"].asBoolean())
+
+        // A second first version is a conflict: the base is now v1.
+        val stale = post(versions, user, mapOf("drawing" to drawing())).expect(409)
+        assertEquals(v1["id"].asText(), stale.json["currentRevisionId"].asText())
+
+        assertEquals(0, get(versions).expect(200).json["items"].size())
+        assertEquals(1, get(versions, user).expect(200).json["items"].size())
+        assertEquals(1, get("/moderation/topo-lines", mod).expect(200).json["items"].count { it["id"] == v1["id"] })
+        get("/moderation/topo-lines", user).expect(403)
+
+        post("/topo-lines/${v1["id"].asText()}/approve", user).expect(403)
+        post("/topo-lines/${v1["id"].asText()}/approve", mod).expect(200)
+        val shown = get("/photos/$photoId").expect(200).json["topoLines"]
+        assertEquals(listOf(v1["id"].asText()), shown.map { it["id"].asText() })
+        assertEquals("Ключ (тест)", shown[0]["drawing"]["labels"][0]["text"].asText())
+
+        // v2 by the user waits; a moderator publishes v3 on the same base, so v2 becomes stale.
+        val v2 = post(versions, user, mapOf("baseVersionId" to v1["id"], "drawing" to drawing(x = 0.3))).expect(201).json
+        val v3 = post(versions, mod, mapOf("baseVersionId" to v1["id"], "drawing" to drawing(x = 0.4), "publish" to true)).expect(201).json
+        assertTrue(v3["isCurrent"].asBoolean())
+        val staleApprove = post("/topo-lines/${v2["id"].asText()}/approve", mod).expect(409)
+        assertEquals("revision-stale", staleApprove.json["type"].asText())
+        post("/topo-lines/${v2["id"].asText()}/reject", mod, mapOf<String, Any>()).expect(400)
+        assertEquals("rejected", post("/topo-lines/${v2["id"].asText()}/reject", mod, mapOf("note" to "тест")).expect(200).json["status"].asText())
+
+        assertEquals(listOf(3, 1), get(versions).expect(200).json["items"].map { it["version"].asInt() })
+        assertEquals(listOf(v3["id"].asText()), get("/photos/$photoId").expect(200).json["topoLines"].map { it["id"].asText() })
+
+        // An empty drawing is a version too: it removes the line, and the history keeps it.
+        val removed = post(versions, mod, mapOf("baseVersionId" to v3["id"], "publish" to true,
+            "drawing" to mapOf("formatVersion" to 1, "paths" to emptyList<Any>()))).expect(201).json
+        val current = get("/photos/$photoId").expect(200).json["topoLines"].single()
+        assertEquals(removed["id"].asText(), current["id"].asText())
+        assertEquals(0, current["drawing"]["paths"].size())
+        assertEquals(listOf(4, 3, 1), get(versions).expect(200).json["items"].map { it["version"].asInt() })
+    }
+
+    // ------------------------------------------------------------- maintenance
+
+    @Test
+    fun `daily maintenance removes expired slots, stale unattached photos and duplicate documents`() {
+        val user = token()
+        val routeId = publishedRoute()
+
+        // An expired slot that was never claimed: its object and row go.
+        val slot = post("/uploads", user, mapOf("purpose" to "photo", "contentType" to "image/png", "sizeBytes" to 10)).expect(201).json
+        val slotKey = jdbc.queryForObject("SELECT storage_key FROM uploads WHERE id = :id", mapOf("id" to UUID.fromString(slot["uploadId"].asText())), String::class.java)!!
+        jdbc.update("UPDATE uploads SET created_at = now() - interval '2 days', expires_at = now() - interval '1 day' WHERE id = :id",
+            mapOf("id" to UUID.fromString(slot["uploadId"].asText())))
+
+        // An unattached photo older than the TTL goes; a fresh one stays.
+        val stale = UUID.randomUUID()
+        val fresh = UUID.randomUUID()
+        for (id in listOf(stale, fresh)) {
+            post("/photos", user, mapOf("id" to id, "uploadId" to upload(user, "photo", "image/png", png(32, 24)), "kind" to "overview")).expect(201)
+            awaitReady(id, user)
+        }
+        jdbc.update("UPDATE photos SET created_at = now() - interval '8 days' WHERE id = :id", mapOf("id" to stale))
+        val staleKey = jdbc.queryForObject("SELECT storage_key FROM photos WHERE id = :id", mapOf("id" to stale), String::class.java)!!
+
+        // The same PDF sent twice (a retry after a lost response), plus a different one: one copy goes.
+        val pdf = minimalPdf()
+        val first = post("/routes/$routeId/documents", user, documentBody(upload(user, "document", "application/pdf", pdf))).expect(201).json
+        val retry = post("/routes/$routeId/documents", user, documentBody(upload(user, "document", "application/pdf", pdf))).expect(201).json
+        val other = post("/routes/$routeId/documents", user,
+            documentBody(upload(user, "document", "application/pdf", pdf + "% other\n".toByteArray()))).expect(201).json
+
+        val report = maintenance.runOnce()
+        assertTrue(report.expiredUploads >= 1)
+        assertTrue(report.unattachedPhotos >= 1)
+        assertEquals(1, report.duplicateDocuments)
+
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM uploads WHERE storage_key = :k", mapOf("k" to slotKey), Int::class.java))
+        get("/photos/$stale", user).expect(404)
+        get("/photos/$fresh", user).expect(200)
+        assertNull(storage.sizeOf(staleKey))
+        get("/documents/${first["id"].asText()}", user).expect(200)
+        get("/documents/${retry["id"].asText()}", user).expect(404)
+        get("/documents/${other["id"].asText()}", user).expect(200)
+
+        // A second run finds nothing new.
+        assertEquals(0, maintenance.runOnce().duplicateDocuments)
     }
 
     // --------------------------------------------------------------- documents

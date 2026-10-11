@@ -10,6 +10,7 @@ import software.amazon.awssdk.core.sync.RequestBody
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.S3Configuration
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException
@@ -67,6 +68,24 @@ class MediaStorage(
                 .build(),
             RequestBody.fromBytes(bytes),
         )
+    }
+
+    /** Content hash of an uploaded object: the ETag, which is the MD5 for a single-part PUT (all our uploads). */
+    fun etagOf(key: String): String? = try {
+        s3.headObject(HeadObjectRequest.builder().bucket(props.s3.bucket).key(key).build()).eTag()?.trim('"')
+    } catch (e: NoSuchKeyException) {
+        null
+    } catch (e: S3Exception) {
+        if (e.statusCode() == 404) null else throw e
+    }
+
+    /** Deleting a missing object is not an error in S3, so cleanup can safely repeat. */
+    fun delete(key: String) {
+        s3.deleteObject(DeleteObjectRequest.builder().bucket(props.s3.bucket).key(key).build())
+    }
+
+    fun deletePublic(key: String) {
+        s3.deleteObject(DeleteObjectRequest.builder().bucket(props.s3.publicBucket).key(key).build())
     }
 
     fun publicUrl(key: String): String = props.s3.publicBaseUrl.trimEnd('/') + "/" + key

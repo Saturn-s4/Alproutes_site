@@ -778,7 +778,7 @@ paths:
         Фото пока ни к чему не привязано (`routeId` и `areaId` — null) и видно только автору
         и модераторам. Оно привязывается к маршруту, когда автор создаёт маршрут с этим фото
         в `RouteContent.photos`. Так новый маршрут создаётся с фото одной ревизией — в том числе
-        из офлайн-очереди Android. Непривязанные фото со временем могут удаляться сервером.
+        из офлайн-очереди Android. Фото, не привязанное за 7 дней, сервер удаляет (раз в сутки).
         `ascentId` здесь не допускается.
       requestBody:
         required: true
@@ -842,6 +842,7 @@ paths:
       tags: [photos]
       operationId: listTopoLineVersions
       summary: История прорисовки маршрута на фото
+      description: Одобренные версии видны всем; на проверке и отклонённые — автору и модераторам.
       security: [{}, { bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/Cursor'
@@ -859,7 +860,8 @@ paths:
       summary: Предложить (новую версию) прорисовки
       description: |
         Как и ревизии маршрута: версия — полный рисунок; при устаревшем `baseVersionId` — `409`.
-        Фото должно быть типа `topo`.
+        Фото должно быть типа `topo` и привязано к маршруту или району; на одном фото могут быть
+        прорисовки нескольких маршрутов (по одной текущей на маршрут).
       requestBody:
         required: true
         content:
@@ -867,12 +869,13 @@ paths:
             schema: { $ref: '#/components/schemas/TopoLineCreate' }
       responses:
         '201':
-          description: Создано, ожидает модерации
+          description: Создано, ожидает модерации (с `publish` — сразу одобрено)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/TopoLine' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
@@ -1087,6 +1090,10 @@ paths:
       tags: [documents]
       operationId: createRouteDocument
       summary: Загрузить архивное описание маршрута
+      description: |
+        Повтор запроса после обрыва связи может создать копию (клиентского `id` у документа нет).
+        Раз в сутки сервер удаляет копии: тот же автор, тот же маршрут, тот же файл (размер и хеш
+        содержимого) за последние дни. Остаётся документ, уже проверенный модератором, иначе самый ранний.
       requestBody:
         required: true
         content:
@@ -1739,7 +1746,9 @@ components:
         currentRevisionId:
           type: string
           format: uuid
-          description: Только для `revision-conflict`
+          description: |
+            Для `revision-conflict` и `revision-stale`: текущая ревизия маршрута,
+            а для прорисовки — текущая (или последняя) версия прорисовки
     FieldError:
       type: object
       required: [field, message]
@@ -2424,10 +2433,24 @@ components:
           type: string
           enum: [main, variant, approach, descent]
           description: Основная нитка, вариант, подход, спуск
+        dashed:
+          type: boolean
+          default: false
+          description: |
+            Пунктир вместо сплошной (например, участок не виден с точки съёмки или
+            проходится по-разному). Независим от `style`.
+        smooth:
+          type: boolean
+          default: true
+          description: |
+            `true` — клиенты проводят через точки гладкую кривую: центростремительный сплайн
+            Catmull–Rom (alpha = 0.5) с повтором крайних точек, в координатах изображения в пикселях.
+            `false` — ломаная. Одинаковое правило на всех клиентах, чтобы рисунок совпадал.
         points:
           type: array
           minItems: 2
           maxItems: 2000
+          description: Опорные точки линии по порядку (не плотная полилиния — кривую строит клиент)
           items: { $ref: '#/components/schemas/TopoPoint' }
     TopoMarker:
       type: object
@@ -2459,8 +2482,11 @@ components:
           description: Версия формата. Клиент, не знающий версию, показывает фото без рисунка.
         paths:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 20
+          description: |
+            Пустой список — на этом фото нитки маршрута нет: так новой версией убирают прорисовку
+            (история сохраняется, откат возможен). Клиенты такую версию не рисуют.
           items: { $ref: '#/components/schemas/TopoPath' }
         markers:
           type: array
@@ -2494,8 +2520,14 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: null — первая прорисовка этого маршрута на этом фото
+          description: |
+            Текущая одобренная версия; пока одобренной нет — последняя версия;
+            null — первая прорисовка этого маршрута на этом фото
         drawing: { $ref: '#/components/schemas/TopoDrawing' }
+        publish:
+          type: boolean
+          default: false
+          description: Только модератор — сразу одобрить (в журнал пишется как самоодобрение). Для остальных `true` — `403`.
     TopoLinePage:
       type: object
       required: [items]

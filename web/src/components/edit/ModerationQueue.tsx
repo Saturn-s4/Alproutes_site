@@ -4,29 +4,43 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api/browser';
 import type { components } from '@/lib/api/schema';
-import type { Document, RightsStatus } from '@/lib/api/types';
+import type { Document, Photo, RightsStatus } from '@/lib/api/types';
+import { currentTopo, type TopoLine } from '@/lib/topo';
 import { formatDate, loc, locText, rightsLabel, sourceTypeLabel } from '@/lib/i18n';
 import { usePrefs } from '../Prefs';
+import { TopoOverlay } from '../TopoOverlay';
 import { SignInFirst } from './Fields';
 
 type RevisionSummary = components['schemas']['RouteRevisionSummary'];
 type Pending = RevisionSummary & { routeName: string; isNew: boolean };
+type PendingTopo = { line: TopoLine; photo: Photo | null; routeName: string; routeSlug: string | null };
 
 const RIGHTS: RightsStatus[] = ['public_domain', 'licensed', 'permission_granted', 'own_work', 'restricted', 'unknown'];
 const PUBLISHABLE: RightsStatus[] = ['public_domain', 'licensed', 'permission_granted', 'own_work'];
 
-/** Moderator's desk: route edits waiting for review and documents waiting for a rights decision. */
+/** Moderator's desk: route edits and topo lines waiting for review, documents waiting for a rights decision. */
 export function ModerationQueue() {
   const { t, lang, session } = usePrefs();
   const [revisions, setRevisions] = useState<Pending[] | null>(null);
   const [documents, setDocuments] = useState<Document[] | null>(null);
+  const [topos, setTopos] = useState<PendingTopo[] | null>(null);
   const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
 
   const load = useCallback(async () => {
-    const [revs, docs] = await Promise.all([
+    const [revs, docs, lines] = await Promise.all([
       api.GET('/moderation/route-revisions', { params: { query: { limit: 50 } } }),
       api.GET('/moderation/documents', { params: { query: { limit: 50 } } }),
+      api.GET('/moderation/topo-lines', { params: { query: { limit: 50 } } }),
     ]);
+    setTopos(await Promise.all(
+      (lines.data?.items ?? []).map(async (line) => {
+        const [photo, route] = await Promise.all([
+          api.GET('/photos/{photoId}', { params: { path: { photoId: line.photoId } } }),
+          api.GET('/routes/{routeId}', { params: { path: { routeId: line.routeId } } }),
+        ]);
+        return { line, photo: photo.data ?? null, routeName: route.data ? locText(route.data.name, lang) : line.routeId, routeSlug: route.data?.slug ?? null };
+      }),
+    ));
     // The queue gives summaries only; names come from each revision (the queue is short).
     const full = await Promise.all(
       (revs.data?.items ?? []).map(async (r) => {
@@ -62,6 +76,14 @@ export function ModerationQueue() {
               </span>
             </Link>
           ))}
+        </div>
+      </section>
+
+      <section className="route-section">
+        <h2 className="h2">{t('mod.topoLines')} · <span className="mono">{topos?.length ?? '…'}</span></h2>
+        {topos?.length === 0 && <p className="muted">{t('mod.noTopoLines')}</p>}
+        <div className="topo-queue">
+          {topos?.map((x) => <TopoReview key={x.line.id} item={x} onDone={() => void load()} />)}
         </div>
       </section>
 
@@ -114,6 +136,56 @@ function DocumentRights({ doc, onDone }: { doc: Document; onDone: () => void }) 
       <div className="row-gap" style={{ gap: '1.2rem' }}>
         <button type="button" className="btn btn-primary" disabled={!PUBLISHABLE.includes(status)} onClick={() => void save(true)}>{t('mod.publish')}</button>
         <button type="button" className="btn btn-ghost" onClick={() => void save(false)}>{t('mod.keepHidden')}</button>
+      </div>
+      {error && <p className="error-text" role="alert">{error}</p>}
+    </div>
+  );
+}
+
+/** A proposed line next to the current one on the same photo. */
+function TopoReview({ item, onDone }: { item: PendingTopo; onDone: () => void }) {
+  const { t, lang } = usePrefs();
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const { line, photo } = item;
+  const current = photo ? currentTopo(photo, line.routeId) : undefined;
+
+  const decide = async (approve: boolean) => {
+    setError(null);
+    const path = { params: { path: { topoLineId: line.id } } };
+    const res = approve
+      ? await api.POST('/topo-lines/{topoLineId}/approve', { ...path, body: { note: note.trim() || undefined } })
+      : await api.POST('/topo-lines/{topoLineId}/reject', { ...path, body: { note: note.trim() } });
+    if (res.data) onDone();
+    else setError(res.error?.type === 'revision-stale' ? t('mod.topoStale') : res.error?.errors?.map((e) => e.message).join('; ') ?? res.error?.detail ?? t('ed.saveFailed'));
+  };
+
+  const view = (drawingOf: TopoLine | undefined, label: string) => (
+    <figure className="topo-review-photo">
+      <div className="topo-wrap">
+        {photo?.urls ? <img src={photo.urls.medium} alt="" /> : <div className="ph-pending">{t('ph.processingBadge')}</div>}
+        {photo?.widthPx && photo.heightPx && drawingOf && (
+          <TopoOverlay drawing={drawingOf.drawing} width={photo.widthPx} height={photo.heightPx} />
+        )}
+      </div>
+      <figcaption className="muted">{label}</figcaption>
+    </figure>
+  );
+
+  return (
+    <div className="box">
+      <div>
+        {item.routeSlug ? <Link href={`/routes/${item.routeSlug}`}><b>{item.routeName}</b></Link> : <b>{item.routeName}</b>}
+        <span className="muted"> · {t('mod.topoVersion')} {line.version} · {line.author.displayName} · {formatDate(line.createdAt, lang)}</span>
+      </div>
+      <div className="topo-review">
+        {view(line, line.drawing.paths.length ? t('mod.topoProposed') : t('mod.topoRemoval'))}
+        {current && view(current, `${t('mod.topoCurrent')} (${current.version})`)}
+      </div>
+      <input className="input" maxLength={2000} placeholder={t('mod.topoNote')} value={note} onChange={(e) => setNote(e.target.value)} />
+      <div className="row-gap" style={{ gap: '1.2rem' }}>
+        <button type="button" className="btn btn-primary" onClick={() => void decide(true)}>{t('mod.approve')}</button>
+        <button type="button" className="btn btn-ghost" disabled={!note.trim()} onClick={() => void decide(false)}>{t('mod.reject')}</button>
       </div>
       {error && <p className="error-text" role="alert">{error}</p>}
     </div>
