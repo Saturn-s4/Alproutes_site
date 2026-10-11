@@ -8,6 +8,7 @@ data class AppProperties(
     val auth: Auth,
     val cors: Cors = Cors(),
     val s3: S3,
+    val maintenance: Maintenance = Maintenance(),
 ) {
     data class Auth(
         val jwtSecret: String,
@@ -16,6 +17,17 @@ data class AppProperties(
         val refreshTokenTtl: Duration = Duration.ofDays(60),
         val googleClientIds: List<String> = emptyList(),
         val appleClientIds: List<String> = emptyList(),
+    )
+
+    /** Daily cleanup (MaintenanceJob). */
+    data class Maintenance(
+        val enabled: Boolean = true,
+        val cron: String = "0 30 3 * * *",
+        /** Unattached photos (POST /photos) never taken by a new route are removed after this. */
+        val unattachedPhotoTtl: Duration = Duration.ofDays(7),
+        /** How far back duplicate documents (a retried POST) are looked for. */
+        val duplicateDocumentWindow: Duration = Duration.ofDays(3),
+        val batchSize: Int = 500,
     )
 
     data class Cors(val allowedOrigins: List<String> = emptyList())

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -25,6 +26,8 @@ import javax.imageio.ImageIO
 
 class MediaTest : IntegrationTest() {
     @Autowired lateinit var s3: S3Client
+    @Autowired lateinit var maintenance: com.alproutes.maintenance.MaintenanceJob
+    @Autowired lateinit var storage: com.alproutes.media.MediaStorage
 
     private val http = HttpClient.newHttpClient()
 
@@ -255,6 +258,53 @@ class MediaTest : IntegrationTest() {
         assertEquals(removed["id"].asText(), current["id"].asText())
         assertEquals(0, current["drawing"]["paths"].size())
         assertEquals(listOf(4, 3, 1), get(versions).expect(200).json["items"].map { it["version"].asInt() })
+    }
+
+    // ------------------------------------------------------------- maintenance
+
+    @Test
+    fun `daily maintenance removes expired slots, stale unattached photos and duplicate documents`() {
+        val user = token()
+        val routeId = publishedRoute()
+
+        // An expired slot that was never claimed: its object and row go.
+        val slot = post("/uploads", user, mapOf("purpose" to "photo", "contentType" to "image/png", "sizeBytes" to 10)).expect(201).json
+        val slotKey = jdbc.queryForObject("SELECT storage_key FROM uploads WHERE id = :id", mapOf("id" to UUID.fromString(slot["uploadId"].asText())), String::class.java)!!
+        jdbc.update("UPDATE uploads SET created_at = now() - interval '2 days', expires_at = now() - interval '1 day' WHERE id = :id",
+            mapOf("id" to UUID.fromString(slot["uploadId"].asText())))
+
+        // An unattached photo older than the TTL goes; a fresh one stays.
+        val stale = UUID.randomUUID()
+        val fresh = UUID.randomUUID()
+        for (id in listOf(stale, fresh)) {
+            post("/photos", user, mapOf("id" to id, "uploadId" to upload(user, "photo", "image/png", png(32, 24)), "kind" to "overview")).expect(201)
+            awaitReady(id, user)
+        }
+        jdbc.update("UPDATE photos SET created_at = now() - interval '8 days' WHERE id = :id", mapOf("id" to stale))
+        val staleKey = jdbc.queryForObject("SELECT storage_key FROM photos WHERE id = :id", mapOf("id" to stale), String::class.java)!!
+
+        // The same PDF sent twice (a retry after a lost response), plus a different one: one copy goes.
+        val pdf = minimalPdf()
+        val first = post("/routes/$routeId/documents", user, documentBody(upload(user, "document", "application/pdf", pdf))).expect(201).json
+        val retry = post("/routes/$routeId/documents", user, documentBody(upload(user, "document", "application/pdf", pdf))).expect(201).json
+        val other = post("/routes/$routeId/documents", user,
+            documentBody(upload(user, "document", "application/pdf", pdf + "% other\n".toByteArray()))).expect(201).json
+
+        val report = maintenance.runOnce()
+        assertTrue(report.expiredUploads >= 1)
+        assertTrue(report.unattachedPhotos >= 1)
+        assertEquals(1, report.duplicateDocuments)
+
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM uploads WHERE storage_key = :k", mapOf("k" to slotKey), Int::class.java))
+        get("/photos/$stale", user).expect(404)
+        get("/photos/$fresh", user).expect(200)
+        assertNull(storage.sizeOf(staleKey))
+        get("/documents/${first["id"].asText()}", user).expect(200)
+        get("/documents/${retry["id"].asText()}", user).expect(404)
+        get("/documents/${other["id"].asText()}", user).expect(200)
+
+        // A second run finds nothing new.
+        assertEquals(0, maintenance.runOnce().duplicateDocuments)
     }
 
     // --------------------------------------------------------------- documents
