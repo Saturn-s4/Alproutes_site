@@ -10,9 +10,6 @@ export const dynamic = 'force-dynamic';
 export default function LoginPage() {
   const config: LoginConfig = {
     googleClientId: process.env.GOOGLE_CLIENT_ID || null,
-    apple: process.env.APPLE_CLIENT_ID && process.env.APPLE_REDIRECT_URI
-      ? { clientId: process.env.APPLE_CLIENT_ID, redirectUri: process.env.APPLE_REDIRECT_URI }
-      : null,
     // The dev form only works against a backend in the dev profile; hidden in production builds unless asked for.
     devLogin: process.env.DEV_LOGIN ? process.env.DEV_LOGIN === 'true' : process.env.NODE_ENV !== 'production',
   };

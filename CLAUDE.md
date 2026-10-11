@@ -114,7 +114,7 @@
 
 - [x] **Шаг 1** — схема БД и OpenAPI-контракт
 - [ ] **Шаг 2** — backend MVP: CRUD маршрутов, auth, загрузка в S3, геопоиск по bbox
-  - [ ] вход через Google и Apple: проверка ID token на backend и кнопки в вебе готовы, нужна проверка с настоящими ключами (Apple — только на домене с HTTPS)
+  - [ ] вход через Google: проверка ID token на backend и кнопка в вебе готовы, нужна проверка с настоящим ключом. Apple — только на backend, в вебе отложен (нужны Apple Developer Program и домен с HTTPS)
   - [x] суточная очистка: просроченные слоты загрузки, непривязанные фото старше 7 дней, копии документов от повторных запросов
 - [x] **Шаг 3** — веб: каталог, карта, SSR-страницы районов и маршрутов, редактирование маршрутов (включая геометрию на карте), модерация
   - [x] каркас `/web`, dev-вход, карта с точками, каталог, SSR-страницы района и маршрута (только чтение)
@@ -185,7 +185,7 @@ cd web && npm install
 cd web && npm run dev                 # http://localhost:3000, перед стартом генерирует типы из openapi.yaml
 cd web && npm run build
 cd web && npm run typecheck
-# Вход через Google/Apple: переменные в web/.env.example и backend/src/main/resources/application.yml, инструкция — web/README.md
+# Вход через Google: переменные в web/.env.example и backend/src/main/resources/application.yml, инструкция — web/README.md
 
 # Тестовые данные для локальной разработки (сгенерированные, с пометкой «ТЕСТ»; нужен запущенный backend)
 java infra/dev-seed/GenerateSamples.java infra/dev-seed/samples

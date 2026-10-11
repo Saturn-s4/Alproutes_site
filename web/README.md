@@ -10,23 +10,19 @@ cd backend && ./gradlew bootRun --args='--spring.profiles.active=dev'
 cd web && npm install && npm run dev
 ```
 
-Открыть `http://localhost:3000`. Вход — `/login`: локально dev-вход backend, при настроенных ключах — Google и Apple (см. ниже). Тестовые данные — `infra/dev-seed`.
+Открыть `http://localhost:3000`. Вход — `/login`: локально dev-вход backend, при настроенном ключе — Google (см. ниже). Тестовые данные — `infra/dev-seed`.
 
-## Вход через Google и Apple
+## Вход через Google
 
-Браузер получает у провайдера ID token, backend проверяет его подпись по ключам провайдера (`POST /auth/oauth/{provider}`) и выдаёт свою пару токенов. Пароли AlpRoutes не хранит. Переменные — в `.env.example` (веб) и `application.yml` (backend); кнопка появляется, только когда задан её провайдер.
+Браузер получает у провайдера ID token, backend проверяет его подпись по ключам провайдера (`POST /auth/oauth/{provider}`) и выдаёт свою пару токенов. Пароли AlpRoutes не хранит. Переменные — в `.env.example` (веб) и `application.yml` (backend); кнопка появляется, только когда задан ключ.
 
 **Google**
 1. Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID → тип **Web application**.
 2. Authorized JavaScript origins: `http://localhost:3000` и адрес продакшена. Redirect URI не нужен (всплывающее окно).
 3. Веб: `GOOGLE_CLIENT_ID=<id>`. Backend: `GOOGLE_CLIENT_IDS=<id>` (через запятую, если клиентов несколько — например, ещё Android).
 
-**Apple** (нужен платный Apple Developer Program)
-1. Certificates, Identifiers & Profiles → Identifiers → **Services IDs** → новый, включить Sign in with Apple.
-2. Configure: домен сайта и Return URL — `https://<домен>/login`. Apple не принимает `localhost` и http, поэтому локально кнопку Apple проверить нельзя — только на домене с HTTPS (или через туннель с HTTPS).
-3. Веб: `APPLE_CLIENT_ID=<Services ID>`, `APPLE_REDIRECT_URI=https://<домен>/login`. Backend: `APPLE_CLIENT_IDS=<Services ID>` (и bundle id iOS-приложения, если появится).
 
-Apple отдаёт имя пользователя только при первом входе — веб передаёт его в `displayName`. Почта может быть скрытой (`privaterelay.appleid.com`).
+Вход через Apple пока не подключён в вебе: backend его поддерживает (`APPLE_CLIENT_IDS`), но нужны Apple Developer Program и домен с HTTPS.
 
 ## Страницы
 
@@ -41,7 +37,7 @@ Apple отдаёт имя пользователя только при перв�
 | `/edit/areas/new`, `/edit/areas/[id]` | районы (модераторы) | клиент |
 | `/revisions/[id]` | ревизия: сравнение с базовой, одобрение / отклонение / откат | клиент |
 | `/moderation` | очередь правок, прорисовок нитки и документов без проверки прав (модераторы) | клиент |
-| `/login` | вход через Google и Apple; dev-вход при разработке | сервер (настройки) + клиент |
+| `/login` | вход через Google; dev-вход при разработке | сервер (настройки) + клиент |
 
 ## Как устроено
 
@@ -69,7 +65,7 @@ Apple отдаёт имя пользователя только при перв�
 | `openapi-fetch` | типизированный fetch по сгенерированным типам, ~6 КБ |
 | `openapi-typescript` (dev) | генерация типов из контракта |
 
-Внешние скрипты (не npm, грузятся только на `/login` и только при настроенном провайдере): Google Identity Services (`accounts.google.com/gsi/client`) и Sign in with Apple JS (`appleid.cdn-apple.com`) — официальные клиенты провайдеров, без них ID token в браузере не получить.
+Внешний скрипт (не npm, грузится только на `/login` и только при настроенном ключе): Google Identity Services (`accounts.google.com/gsi/client`) — официальный клиент Google, без него ID token в браузере не получить.
 
 ## Не сделано
 

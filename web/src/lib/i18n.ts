@@ -173,8 +173,7 @@ const ru = {
 
   'login.title': 'Вход',
   'login.devNote': 'Вход для разработки: без OAuth, через dev-профиль backend. В рабочей версии этой формы нет.',
-  'login.apple': 'Войти через Apple',
-  'login.providersNote': 'Мы получаем от провайдера только имя и email. Пароля у AlpRoutes нет.',
+  'login.providersNote': 'Мы получаем от Google только имя и email. Пароля у AlpRoutes нет.',
   'login.noProviders': 'Вход пока не настроен на этом сервере.',
   'login.email': 'Email',
   'login.name': 'Имя',
@@ -522,8 +521,7 @@ const en: Record<MessageKey, string> = {
 
   'login.title': 'Sign in',
   'login.devNote': 'Development sign-in: no OAuth, via the backend dev profile. Production has no such form.',
-  'login.apple': 'Sign in with Apple',
-  'login.providersNote': 'We only get your name and email from the provider. AlpRoutes has no passwords.',
+  'login.providersNote': 'We only get your name and email from Google. AlpRoutes has no passwords.',
   'login.noProviders': 'Sign-in is not configured on this server yet.',
   'login.email': 'Email',
   'login.name': 'Name',

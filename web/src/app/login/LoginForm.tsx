@@ -9,27 +9,17 @@ import type { TokenPair, UserRole } from '@/lib/api/types';
 
 export type LoginConfig = {
   googleClientId: string | null;
-  apple: { clientId: string; redirectUri: string } | null;
   devLogin: boolean;
 };
 
-// Minimal typings of the two provider scripts (Google Identity Services, Sign in with Apple JS).
+// Minimal typings of the Google Identity Services script.
 type GoogleId = {
   initialize: (o: { client_id: string; callback: (r: { credential: string }) => void; nonce: string; ux_mode: 'popup'; auto_select: boolean }) => void;
   renderButton: (el: HTMLElement, o: Record<string, string | number>) => void;
 };
-type AppleSignInResult = {
-  authorization: { id_token: string };
-  user?: { name?: { firstName?: string; lastName?: string } };
-};
-type AppleAuth = {
-  init: (o: { clientId: string; scope: string; redirectURI: string; state: string; nonce: string; usePopup: boolean }) => void;
-  signIn: () => Promise<AppleSignInResult>;
-};
 declare global {
   interface Window {
     google?: { accounts: { id: GoogleId } };
-    AppleID?: { auth: AppleAuth };
   }
 }
 
@@ -53,12 +43,12 @@ export function LoginForm({ config }: { config: LoginConfig }) {
     router.push('/');
   }, [router]);
 
-  const exchange = useCallback(async (provider: 'google' | 'apple', idToken: string, displayName?: string) => {
+  const exchange = useCallback(async (provider: 'google', idToken: string) => {
     setBusy(true);
     setError(null);
     const { data, error: problem } = await publicApi.POST('/auth/oauth/{provider}', {
       params: { path: { provider } },
-      body: { idToken, nonce: nonce.current, displayName },
+      body: { idToken, nonce: nonce.current },
     });
     setBusy(false);
     if (data) done(data);
@@ -91,49 +81,12 @@ export function LoginForm({ config }: { config: LoginConfig }) {
     });
   }, [config.googleClientId, googleLoaded, exchange, lang, theme]);
 
-  // ---------------------------------------------------------------- Apple
-
-  const [appleLoaded, setAppleLoaded] = useState(false);
-  useEffect(() => {
-    if (!config.apple || !appleLoaded || !window.AppleID) return;
-    window.AppleID.auth.init({
-      clientId: config.apple.clientId,
-      scope: 'name email',
-      redirectURI: config.apple.redirectUri,
-      state: nonce.current,
-      nonce: nonce.current,
-      usePopup: true,
-    });
-  }, [config.apple, appleLoaded]);
-
-  const appleSignIn = async () => {
-    if (!window.AppleID) return;
-    setError(null);
-    try {
-      const res = await window.AppleID.auth.signIn();
-      // Apple sends the name on the first sign-in only, and outside the ID token.
-      const name = [res.user?.name?.firstName, res.user?.name?.lastName].filter(Boolean).join(' ') || undefined;
-      await exchange('apple', res.authorization.id_token, name);
-    } catch (e) {
-      // Closing the popup is not an error worth showing.
-      const code = (e as { error?: string } | null)?.error;
-      if (code !== 'popup_closed_by_user' && code !== 'user_cancelled_authorize') setError(t('login.failed'));
-    }
-  };
-
-  const providers = !!config.googleClientId || !!config.apple;
+  const providers = !!config.googleClientId;
 
   return (
     <div className="login">
       {config.googleClientId && (
         <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={() => setGoogleLoaded(true)} />
-      )}
-      {config.apple && (
-        <Script
-          src={`https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/${lang === 'ru' ? 'ru_RU' : 'en_US'}/appleid.auth.js`}
-          strategy="afterInteractive"
-          onReady={() => setAppleLoaded(true)}
-        />
       )}
       <div className="login-side">
         <div className="login-form">
@@ -147,18 +100,11 @@ export function LoginForm({ config }: { config: LoginConfig }) {
           {providers && (
             <div className="login-providers">
               {config.googleClientId && <div ref={googleRef} className="google-button" aria-busy={!googleLoaded} />}
-              {config.apple && (
-                <button type="button" className="btn apple-button" disabled={!appleLoaded || busy} onClick={() => void appleSignIn()}>
-                  <svg viewBox="0 0 17 20" width="17" height="20" aria-hidden="true">
-                    <path fill="currentColor" d="M14.1 10.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.7-1-2.7-4.1zM11.6 3c.7-.9 1.2-2 1.1-3.1-1 0-2.3.7-3 1.6-.7.8-1.2 2-1.1 3.1 1.2.1 2.3-.6 3-1.6z" />
-                  </svg>
-                  {t('login.apple')}
-                </button>
-              )}
               <p className="field-hint">{t('login.providersNote')}</p>
             </div>
           )}
           {!providers && !config.devLogin && <p className="status-note">{t('login.noProviders')}</p>}
+          {busy && <p className="muted">{t('common.loading')}</p>}
           {error && <p className="error-text" role="alert">{error}</p>}
 
           {config.devLogin && <DevLogin onDone={done} separated={providers} />}
