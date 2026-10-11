@@ -238,7 +238,8 @@ class RouteService(
     private fun stats(routeId: UUID): RouteStats = jdbc.query(
         """
         SELECT
-          (SELECT count(*) FROM photos    WHERE route_id = :id AND deleted_at IS NULL AND visibility = 'visible') AS photos,
+          (SELECT count(*) FROM photos p  WHERE p.route_id = :id AND p.deleted_at IS NULL AND p.visibility = 'visible'
+              AND NOT EXISTS (SELECT 1 FROM ascents a WHERE a.id = p.ascent_id AND a.is_private)) AS photos,
           (SELECT count(*) FROM tracks    WHERE route_id = :id AND deleted_at IS NULL AND visibility = 'visible') AS tracks,
           (SELECT count(*) FROM ascents   WHERE route_id = :id AND deleted_at IS NULL AND visibility = 'visible' AND NOT is_private) AS ascents,
           (SELECT count(*) FROM comments  WHERE route_id = :id AND deleted_at IS NULL AND visibility = 'visible') AS comments,

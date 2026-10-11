@@ -260,6 +260,78 @@ class MediaTest : IntegrationTest() {
         assertEquals(listOf(4, 3, 1), get(versions).expect(200).json["items"].map { it["version"].asInt() })
     }
 
+    // ----------------------------------------------------------------- ascents
+
+    @Test
+    fun `ascents belong to the route, private ones and their photos stay with the author`() {
+        val me = login()
+        val user = me.accessToken
+        val friend = login()
+        val other = friend.accessToken
+        val routeId = publishedRoute()
+        val ascents = "/routes/$routeId/ascents"
+        fun body(id: UUID, date: String, precision: String = "day", extra: Map<String, Any?> = emptyMap()) =
+            mapOf("id" to id, "ascentDate" to date, "datePrecision" to precision) + extra
+
+        // Validation: no future dates, known precision, every member has a name or a user.
+        post(ascents, user, body(UUID.randomUUID(), java.time.LocalDate.now().plusDays(3).toString())).expect(400)
+        post(ascents, user, body(UUID.randomUUID(), "2026-07-15", "week")).expect(400)
+        post(ascents, user, body(UUID.randomUUID(), "2026-07-15", extra = mapOf("members" to listOf(mapOf("isLeader" to true))))).expect(400)
+
+        // A month-precision date is stored as the first day of the month.
+        val a1 = UUID.randomUUID()
+        val created = post(ascents, user, body(a1, "2025-07-15", "month", mapOf(
+            "outcome" to "summit", "totalTimeMinutes" to 14 * 60, "conditions" to " Свежий снег (тест) ", "language" to "ru",
+            "members" to listOf(mapOf("name" to "Анна (тест)", "isLeader" to true), mapOf("userId" to friend.user.id)),
+        ))).expect(201).json
+        assertEquals("2025-07-01", created["ascentDate"].asText())
+        assertEquals("Свежий снег (тест)", created["conditions"].asText())
+        assertTrue(created["members"][0]["isLeader"].asBoolean())
+        assertEquals(friend.user.id.toString(), created["members"][1]["user"]["id"].asText())
+        assertFalse(created["isPrivate"].asBoolean())
+        post(ascents, user, body(a1, "2025-07-15", "month")).expect(200)
+
+        val a2 = UUID.randomUUID()
+        post(ascents, user, body(a2, "2026-08-02", extra = mapOf("outcome" to "retreat", "isPrivate" to true))).expect(201)
+
+        // Photos go to one's own ascent only; a private ascent's photos stay private.
+        val publicPhoto = UUID.randomUUID()
+        post("/routes/$routeId/photos", user, mapOf("id" to publicPhoto, "uploadId" to upload(user, "photo", "image/png", png(32, 24)),
+            "kind" to "detail", "ascentId" to a1)).expect(201)
+        awaitReady(publicPhoto, user)
+        post("/routes/$routeId/photos", other, mapOf("id" to UUID.randomUUID(), "uploadId" to upload(other, "photo", "image/png", png(32, 24)),
+            "kind" to "detail", "ascentId" to a1)).expect(400)
+        val privatePhoto = UUID.randomUUID()
+        post("/routes/$routeId/photos", user, mapOf("id" to privatePhoto, "uploadId" to upload(user, "photo", "image/png", png(32, 24)),
+            "kind" to "detail", "ascentId" to a2)).expect(201)
+        awaitReady(privatePhoto, user)
+
+        assertEquals(listOf(a1.toString()), get(ascents).expect(200).json["items"].map { it["id"].asText() })
+        assertEquals(listOf(a2.toString(), a1.toString()), get(ascents, user).expect(200).json["items"].map { it["id"].asText() })
+        assertEquals(listOf(publicPhoto.toString()), get("/ascents/$a1").expect(200).json["photos"].map { it["id"].asText() })
+        get("/ascents/$a2").expect(404)
+        get("/ascents/$a2", other).expect(404)
+        get("/photos/$privatePhoto").expect(404)
+        get("/photos/$privatePhoto", user).expect(200)
+        assertEquals(listOf(publicPhoto.toString()), photoIds(get("/routes/$routeId/photos").expect(200).json))
+        assertEquals(1, get("/routes/$routeId").expect(200).json["stats"]["ascentCount"].asInt())
+        assertEquals(1, get("/users/${me.user.id}/ascents").expect(200).json["items"].size())
+        assertEquals(2, get("/users/${me.user.id}/ascents", user).expect(200).json["items"].size())
+
+        // PUT replaces the whole record, members included.
+        put("/ascents/$a1", other, body(a1, "2025-07-01", "month")).expect(403)
+        val updated = put("/ascents/$a1", user, mapOf("ascentDate" to "2025-07-20", "datePrecision" to "day", "outcome" to "retreat",
+            "members" to listOf(mapOf("name" to "Борис (тест)")))).expect(200).json
+        assertEquals("retreat", updated["outcome"].asText())
+        assertEquals(1, updated["members"].size())
+        assertTrue(updated["conditions"].isNull)
+
+        delete("/ascents/$a1", other).expect(403)
+        delete("/ascents/$a1", user).expect(204)
+        get("/ascents/$a1").expect(404)
+        get("/photos/$publicPhoto").expect(404)
+    }
+
     // ---------------------------------------------------------------- comments
 
     @Test

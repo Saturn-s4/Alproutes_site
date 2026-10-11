@@ -1176,6 +1176,7 @@ paths:
       tags: [ascents]
       operationId: listRouteAscents
       summary: Восхождения по маршруту (публичные)
+      description: Публичные записи, свежие (по дате восхождения) сверху; автор видит и свои приватные.
       security: [{}, { bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/Cursor'
@@ -1250,7 +1251,8 @@ paths:
     delete:
       tags: [ascents]
       operationId: deleteAscent
-      summary: Удалить запись (автор)
+      summary: Удалить запись (автор или модератор)
+      description: Фото восхождения удаляются вместе с записью.
       responses:
         '204': { description: Удалено }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2678,7 +2680,9 @@ components:
     # ------------------------------------------------------------ ascents
     AscentMember:
       type: object
-      description: Участник группы помимо автора. Зарегистрированный (userId) или просто по имени.
+      description: |
+        Участник группы помимо автора. Зарегистрированный (userId) или просто по имени —
+        хотя бы одно из двух. Имена третьих лиц публичны вместе с записью (кроме приватной).
       properties:
         userId: { type: string, format: uuid, nullable: true }
         user: { $ref: '#/components/schemas/UserPublic' }
@@ -2691,7 +2695,9 @@ components:
         ascentDate:
           type: string
           format: date
-          description: При точности month/year — первое число периода (1985-07-01, 1985-01-01)
+          description: |
+            При точности month/year — первое число периода (1985-07-01, 1985-01-01); сервер
+            приводит к нему сам. Не позже сегодняшнего дня и не раньше 1850 года.
         datePrecision: { type: string, enum: [day, month, year] }
         outcome:
           type: string
@@ -2701,7 +2707,10 @@ components:
         conditions: { type: string, nullable: true, maxLength: 5000 }
         report: { type: string, nullable: true, maxLength: 20000 }
         language: { $ref: '#/components/schemas/LanguageCode' }
-        isPrivate: { type: boolean, default: false }
+        isPrivate:
+          type: boolean
+          default: false
+          description: Приватную запись видит только автор; в счётчик восхождений маршрута она не входит.
         members:
           type: array
           maxItems: 30
@@ -2717,11 +2726,17 @@ components:
       allOf:
         - $ref: '#/components/schemas/AscentFields'
         - type: object
-          required: [id, routeId, user, createdAt, updatedAt]
+          required: [id, routeId, user, photos, createdAt, updatedAt]
           properties:
             id: { type: string, format: uuid }
             routeId: { type: string, format: uuid }
             route: { $ref: '#/components/schemas/RouteSummary' }
+            photos:
+              type: array
+              description: |
+                Фото восхождения (`Photo.ascentId`), старые сверху. Загружаются после создания записи:
+                `POST /routes/{routeId}/photos` с `ascentId`. Чужие — только готовые и не скрытые.
+              items: { $ref: '#/components/schemas/Photo' }
             user: { $ref: '#/components/schemas/UserPublic' }
             createdAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }

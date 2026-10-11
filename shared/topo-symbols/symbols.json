@@ -1,0 +1,545 @@
+{
+  "formatVersion": 1,
+  "description": "Topo symbols for route drawings on photos (UIAA-style, after the alplager.kz school sheet, redrawn). Source of truth for web and Android: edit here, then run node shared/topo-symbols/build.mjs. Geometry: 24x24 grid; every element is one SVG path string (Android PathParser reads the same), stroked with strokeWidth, round caps and joins; elements with fill=true are filled with the same colour. Line dash values are multiples of the line stroke width.",
+  "viewBox": 24,
+  "strokeWidth": 2,
+  "groups": [
+    {
+      "id": "terrain",
+      "label": {
+        "ru": "Рельеф",
+        "en": "Terrain"
+      }
+    },
+    {
+      "id": "surface",
+      "label": {
+        "ru": "Покров",
+        "en": "Surface"
+      }
+    },
+    {
+      "id": "protection",
+      "label": {
+        "ru": "Станции и снаряжение",
+        "en": "Belays and gear"
+      }
+    },
+    {
+      "id": "bivouac",
+      "label": {
+        "ru": "Ночёвки",
+        "en": "Bivouacs"
+      }
+    },
+    {
+      "id": "movement",
+      "label": {
+        "ru": "Передвижение",
+        "en": "Movement"
+      }
+    },
+    {
+      "id": "humor",
+      "label": {
+        "ru": "Шуточные",
+        "en": "Just for fun"
+      }
+    }
+  ],
+  "symbols": [
+    {
+      "id": "couloir",
+      "group": "terrain",
+      "label": {
+        "ru": "Кулуар",
+        "en": "Couloir"
+      },
+      "paths": [
+        {
+          "d": "M4 18.5L14 5M9.5 20L19.5 6"
+        }
+      ]
+    },
+    {
+      "id": "wall",
+      "group": "terrain",
+      "label": {
+        "ru": "Стенка",
+        "en": "Wall"
+      },
+      "paths": [
+        {
+          "d": "M7 4H17V20H7Z"
+        }
+      ]
+    },
+    {
+      "id": "ledge",
+      "group": "terrain",
+      "label": {
+        "ru": "Полка",
+        "en": "Ledge"
+      },
+      "paths": [
+        {
+          "d": "M4.5 15L8 9.5H20L16.5 15Z"
+        }
+      ]
+    },
+    {
+      "id": "dihedral",
+      "group": "terrain",
+      "label": {
+        "ru": "Внутренний угол",
+        "en": "Dihedral (inside corner)"
+      },
+      "paths": [
+        {
+          "d": "M6.5 4L12 7L17.5 4V17L12 20.5L6.5 17ZM12 7V20.5"
+        }
+      ]
+    },
+    {
+      "id": "arete",
+      "group": "terrain",
+      "label": {
+        "ru": "Внешний угол",
+        "en": "Arête (outside corner)"
+      },
+      "paths": [
+        {
+          "d": "M6.5 7L12 3.5L17.5 7V20.5L12 17L6.5 20.5ZM12 3.5V17"
+        }
+      ]
+    },
+    {
+      "id": "ridge",
+      "group": "terrain",
+      "label": {
+        "ru": "Гребень",
+        "en": "Ridge"
+      },
+      "paths": [
+        {
+          "d": "M3 17C9 14 15 11.5 21 9.5M6.5 15.4L5.6 18.6M10.5 13.5L9.8 16.7M14.5 11.8L13.9 15M18.5 10.4L18.1 13.6"
+        }
+      ]
+    },
+    {
+      "id": "chimney",
+      "group": "terrain",
+      "label": {
+        "ru": "Камин",
+        "en": "Chimney"
+      },
+      "paths": [
+        {
+          "d": "M7.5 4L10.5 7.5V16.5L7.5 20M16.5 4L13.5 7.5V16.5L16.5 20"
+        }
+      ]
+    },
+    {
+      "id": "chockstone",
+      "group": "terrain",
+      "label": {
+        "ru": "Пробка",
+        "en": "Chockstone"
+      },
+      "paths": [
+        {
+          "d": "M12 6A6 6 0 1 1 12 18A6 6 0 1 1 12 6ZM8.4 15.6L15.6 8.4M7.4 12.8L12.8 7.4M11.2 16.6L16.6 11.2"
+        }
+      ]
+    },
+    {
+      "id": "summit",
+      "group": "terrain",
+      "label": {
+        "ru": "Вершина",
+        "en": "Summit"
+      },
+      "paths": [
+        {
+          "d": "M3.5 19.5V7L21.5 7L3.5 11.5"
+        }
+      ]
+    },
+    {
+      "id": "cairn",
+      "group": "terrain",
+      "label": {
+        "ru": "Тур",
+        "en": "Cairn"
+      },
+      "paths": [
+        {
+          "d": "M12 7.5L16.5 16H7.5Z"
+        }
+      ]
+    },
+    {
+      "id": "buttress",
+      "group": "terrain",
+      "label": {
+        "ru": "Контрфорс",
+        "en": "Buttress"
+      },
+      "paths": [
+        {
+          "d": "M9 3L15 21M5.5 5.5L10 6.5L13.5 3.5M6.5 9.5L11.3 10.5L15 7.5M7.8 13.5L12.6 14.5L16.3 11.5M9.2 17.5L13.9 18.5L17.6 15.5"
+        }
+      ]
+    },
+    {
+      "id": "overhang",
+      "group": "terrain",
+      "label": {
+        "ru": "Карниз, нависание",
+        "en": "Roof, overhang"
+      },
+      "paths": [
+        {
+          "d": "M3 7Q12 17 21 7M7.5 10.7V7.5M10.5 11.8V8M13.5 11.8V8M16.5 10.7V7.5"
+        }
+      ]
+    },
+    {
+      "id": "slabs",
+      "group": "terrain",
+      "label": {
+        "ru": "Бараньи лбы, катушки",
+        "en": "Rock slabs (roches moutonnées)"
+      },
+      "paths": [
+        {
+          "d": "M2 6Q7 10 12.5 4.5M5 7.6L4.3 10.2M7.5 7.7V10.4M10 6.6L10.9 9.1M11 9Q16 13 21.5 7.5M14 10.6L13.3 13.2M16.5 10.7V13.4M19 9.6L19.9 12.1"
+        }
+      ]
+    },
+    {
+      "id": "cave",
+      "group": "terrain",
+      "label": {
+        "ru": "Грот",
+        "en": "Cave, grotto"
+      },
+      "paths": [
+        {
+          "d": "M5 6H19M8.5 6C8.5 12 8 16 5 18.5M15.5 6C15.5 12 16 16 19 18.5"
+        }
+      ]
+    },
+    {
+      "id": "crevasse",
+      "group": "terrain",
+      "label": {
+        "ru": "Трещина в леднике",
+        "en": "Crevasse"
+      },
+      "paths": [
+        {
+          "d": "M2 10Q10 21 22 5M2 10Q12 10.5 21 3M5.7 13.5L7.4 10.3M8.7 14.5L10.5 9.9M11.8 14L13.5 9.1M15.2 12.2L16.6 7.6M18.5 9.2L19.4 5.6"
+        }
+      ]
+    },
+    {
+      "id": "ice_snow",
+      "group": "surface",
+      "label": {
+        "ru": "Лёд, снег",
+        "en": "Ice, snow"
+      },
+      "paths": [
+        {
+          "d": "M8 6.5V11.5M5.5 9H10.5M16 5.5V10.5M13.5 8H18.5M12 13V18M9.5 15.5H14.5"
+        }
+      ]
+    },
+    {
+      "id": "scree",
+      "group": "surface",
+      "label": {
+        "ru": "Осыпь",
+        "en": "Scree"
+      },
+      "paths": [
+        {
+          "d": "M8.5 7A2 2 0 1 1 8.5 11A2 2 0 1 1 8.5 7ZM15.5 7A2 2 0 1 1 15.5 11A2 2 0 1 1 15.5 7ZM12 13.3A2.2 2.2 0 1 1 12 17.7A2.2 2.2 0 1 1 12 13.3Z"
+        }
+      ]
+    },
+    {
+      "id": "grass",
+      "group": "surface",
+      "label": {
+        "ru": "Трава",
+        "en": "Grass"
+      },
+      "paths": [
+        {
+          "d": "M6.5 11C6.5 8 5.0 6.5 3.5 5.5M6.5 11V4M6.5 11C6.5 8 8.0 6.5 9.5 5.5M4.0 11H9.0M17.5 10.5C17.5 7.5 16.0 6.0 14.5 5.0M17.5 10.5V3.5M17.5 10.5C17.5 7.5 19.0 6.0 20.5 5.0M15.0 10.5H20.0M12 19C12 16 10.5 14.5 9 13.5M12 19V12M12 19C12 16 13.5 14.5 15 13.5M9.5 19H14.5"
+        }
+      ]
+    },
+    {
+      "id": "trees",
+      "group": "surface",
+      "label": {
+        "ru": "Деревья, кусты",
+        "en": "Trees, bushes"
+      },
+      "paths": [
+        {
+          "d": "M6.5 3V21M3.5 8.5L6.5 5.5L9.5 8.5M3 12.5L6.5 9L10 12.5M2.5 17L6.5 13L10.5 17M3.5 21H9.5M17 21V15M14.5 21H19.5M14.3 15.2A3 3 0 0 1 14.2 9.3A3.4 3.4 0 0 1 20.3 8.4A3.1 3.1 0 0 1 20 15.2Z"
+        }
+      ]
+    },
+    {
+      "id": "belay_good",
+      "group": "protection",
+      "label": {
+        "ru": "Удобная станция",
+        "en": "Good belay"
+      },
+      "paths": [
+        {
+          "d": "M12 5.5A6.5 6.5 0 1 1 12 18.5A6.5 6.5 0 1 1 12 5.5ZM5.5 12H18.5"
+        }
+      ]
+    },
+    {
+      "id": "belay_poor",
+      "group": "protection",
+      "label": {
+        "ru": "Неудобная станция",
+        "en": "Poor belay"
+      },
+      "paths": [
+        {
+          "d": "M12 5.5A6.5 6.5 0 1 1 12 18.5A6.5 6.5 0 1 1 12 5.5ZM7.4 16.6L16.6 7.4"
+        }
+      ]
+    },
+    {
+      "id": "belay_bad",
+      "group": "protection",
+      "label": {
+        "ru": "Совсем неудобная станция",
+        "en": "Hanging belay"
+      },
+      "paths": [
+        {
+          "d": "M12 5.5A6.5 6.5 0 1 1 12 18.5A6.5 6.5 0 1 1 12 5.5ZM12 5.5V18.5"
+        }
+      ]
+    },
+    {
+      "id": "bolt",
+      "group": "protection",
+      "label": {
+        "ru": "Шлямбур",
+        "en": "Bolt"
+      },
+      "paths": [
+        {
+          "d": "M8.5 8.5L15.5 15.5M15.5 8.5L8.5 15.5"
+        }
+      ]
+    },
+    {
+      "id": "piton",
+      "group": "protection",
+      "label": {
+        "ru": "Крюк",
+        "en": "Piton"
+      },
+      "paths": [
+        {
+          "d": "M5 10H18M11.5 10C11 16 18.5 16 17.5 10"
+        }
+      ]
+    },
+    {
+      "id": "crack_aid",
+      "group": "protection",
+      "label": {
+        "ru": "Трещина с ИТО",
+        "en": "Crack, aid"
+      },
+      "paths": [
+        {
+          "d": "M12 3V9.5M12 14.5V21M10 9.5H14V14.5H10Z"
+        }
+      ]
+    },
+    {
+      "id": "crack_free",
+      "group": "protection",
+      "label": {
+        "ru": "Трещина с лазаньем",
+        "en": "Crack, free climbing"
+      },
+      "paths": [
+        {
+          "d": "M12 3V9L15.5 9.8L8.5 14.2L12 15V21"
+        }
+      ]
+    },
+    {
+      "id": "bivouac_good",
+      "group": "bivouac",
+      "label": {
+        "ru": "Удобная ночёвка",
+        "en": "Good bivouac"
+      },
+      "paths": [
+        {
+          "d": "M12 3.5A8.5 8.5 0 1 1 12 20.5A8.5 8.5 0 1 1 12 3.5ZM12 6.5A5.5 5.5 0 1 1 12 17.5A5.5 5.5 0 1 1 12 6.5ZM6.5 12H17.5"
+        }
+      ]
+    },
+    {
+      "id": "bivouac_fair",
+      "group": "bivouac",
+      "label": {
+        "ru": "Так себе ночёвка",
+        "en": "Fair bivouac"
+      },
+      "paths": [
+        {
+          "d": "M12 3.5A8.5 8.5 0 1 1 12 20.5A8.5 8.5 0 1 1 12 3.5ZM12 6.5A5.5 5.5 0 1 1 12 17.5A5.5 5.5 0 1 1 12 6.5ZM8.1 15.9L15.9 8.1"
+        }
+      ]
+    },
+    {
+      "id": "bivouac_bad",
+      "group": "bivouac",
+      "label": {
+        "ru": "Ужасная ночёвка",
+        "en": "Bad bivouac"
+      },
+      "paths": [
+        {
+          "d": "M12 3.5A8.5 8.5 0 1 1 12 20.5A8.5 8.5 0 1 1 12 3.5ZM12 6.5A5.5 5.5 0 1 1 12 17.5A5.5 5.5 0 1 1 12 6.5ZM12 6.5V17.5"
+        }
+      ]
+    },
+    {
+      "id": "rappel",
+      "group": "movement",
+      "label": {
+        "ru": "Спуск по верёвке",
+        "en": "Rappel"
+      },
+      "paths": [
+        {
+          "d": "M12 3A2.2 2.2 0 1 1 12 7.4A2.2 2.2 0 1 1 12 3ZM12 7.4V19.5M8.5 16L12 19.5L15.5 16"
+        }
+      ]
+    },
+    {
+      "id": "pendulum",
+      "group": "movement",
+      "label": {
+        "ru": "Маятник",
+        "en": "Pendulum"
+      },
+      "paths": [
+        {
+          "d": "M9 3L8.1 13.5M8 13.5A2 2 0 1 1 8 17.5A2 2 0 1 1 8 13.5ZM6.3 16.3L2.3 12.6M2.8 16.0L2.3 12.6L5.7 12.9M15 3V18L21.5 14.7M18.2 14.0L21.5 14.7L20.1 17.8"
+        }
+      ]
+    },
+    {
+      "id": "crux",
+      "group": "movement",
+      "label": {
+        "ru": "Ключ маршрута",
+        "en": "Crux"
+      },
+      "paths": [
+        {
+          "d": "M6.8 21.5C5.4 21.6 4.6 20.2 5.5 19.3C6.4 18.4 7.9 19 7.8 20.4C7.7 21.7 6 22.3 5.6 21.6M7.8 20.4L6.6 3.6C6.5 2.3 8.6 1.6 8.9 3.4C9.4 6.8 3.8 9.6 3.8 13.6C3.8 16.4 6.5 17.6 8.6 16.4C10.4 15.3 10 12.2 7.8 12.3C6.2 12.4 5.7 14.4 7 15.1"
+        },
+        {
+          "d": "M13 21L17.2 13.6M21.99 8.75A3.3 3.3 0 1 1 17.95 6.41"
+        }
+      ]
+    },
+    {
+      "id": "tien_shan_perch",
+      "group": "humor",
+      "humor": true,
+      "label": {
+        "ru": "Тяньшанский окунь",
+        "en": "Tien Shan perch"
+      },
+      "paths": [
+        {
+          "d": "M7 12C9 8.5 14 7.5 18 9.5C19.5 10.2 21 11.3 22 12.5C20 14.5 15.5 16.5 11 15.5C9.3 15.1 8 14 7 12ZM7 12L2.5 9.5L4 12.5L2.5 15L7 12M9.5 9.7L10.2 7.2L11.5 8.6L12.6 6.4L13.6 8.2L15 6.5L15.6 8.5L17.3 7.4L17.6 9.4M12 9.3V15.3M14.5 9V15.6M10.5 15.3L10 17.5M15 15.7L15.5 17.8"
+        },
+        {
+          "d": "M19 10.6A0.9 0.9 0 1 1 19 12.4A0.9 0.9 0 1 1 19 10.6Z",
+          "fill": true
+        }
+      ]
+    },
+    {
+      "id": "deer",
+      "group": "humor",
+      "humor": true,
+      "label": {
+        "ru": "Олени!",
+        "en": "Deer!"
+      },
+      "paths": [
+        {
+          "d": "M8 10.5C8 9 10 8.5 12 8.5C14 8.5 16 9 16 10.5C16 14.5 14 19.5 12 20.5C10 19.5 8 14.5 8 10.5ZM8 10.5L5 9.5M16 10.5L19 9.5M9.5 8.8L6 6L4.5 2.5M6 6L2.5 5M7.6 7.3L8.2 3.5M14.5 8.8L18 6L19.5 2.5M18 6L21.5 5M16.4 7.3L15.8 3.5"
+        },
+        {
+          "d": "M10.4 12A0.9 0.9 0 1 1 10.4 13.8A0.9 0.9 0 1 1 10.4 12ZM13.6 12A0.9 0.9 0 1 1 13.6 13.8A0.9 0.9 0 1 1 13.6 12ZM12 17.6L13 18.6L12 19.6L11 18.6Z",
+          "fill": true
+        }
+      ]
+    }
+  ],
+  "lines": [
+    {
+      "id": "route",
+      "label": {
+        "ru": "Линия маршрута",
+        "en": "Route line"
+      },
+      "dash": [
+        3,
+        2.2
+      ]
+    },
+    {
+      "id": "variant",
+      "label": {
+        "ru": "Вариант маршрута",
+        "en": "Route variant"
+      },
+      "dash": [
+        4,
+        1.8,
+        0.01,
+        1.8
+      ]
+    },
+    {
+      "id": "hidden",
+      "label": {
+        "ru": "Невидимая часть",
+        "en": "Hidden section"
+      },
+      "dash": [
+        0.01,
+        2
+      ],
+      "arrowEnd": true
+    }
+  ]
+}
