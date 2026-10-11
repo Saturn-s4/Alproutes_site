@@ -966,3 +966,20 @@ a.chip[aria-pressed='true'] { border-color: var(--accent); background: var(--acc
 .comment-composer { display: flex; flex-direction: column; gap: 0.8rem; }
 .comment-input { height: 9rem; border-radius: 0.8rem; font-size: 1.5rem; }
 .comment-composer.reply .comment-input { height: 6.4rem; }
+
+/* Ascents */
+.ascents { display: flex; flex-direction: column; gap: 1.2rem; max-width: var(--measure); }
+.ascent { display: flex; flex-direction: column; gap: 0.8rem; padding: 1.4rem 1.6rem; border-radius: 1.2rem; background: var(--surface); border: 1px solid var(--line); }
+.ascent-head { display: flex; flex-wrap: wrap; gap: 0.6rem 1.2rem; align-items: baseline; }
+.ascent-date { font-family: var(--font-display); font-weight: 700; font-size: 1.7rem; }
+.ascent-outcome { padding: 0.2rem 0.9rem; border-radius: 1rem; font-size: 1.25rem; font-weight: 600; }
+.ascent-outcome.summit { background: var(--accent-soft); color: var(--accent-text); }
+.ascent-outcome.retreat { background: var(--raised); color: var(--text2); }
+.ascent-private { padding: 0.2rem 0.9rem; border-radius: 1rem; font-size: 1.2rem; background: var(--blue-soft); color: var(--blue-text); }
+.ascent-facts { display: flex; flex-wrap: wrap; gap: 0.4rem 2.4rem; margin: 0; font-size: 1.4rem; }
+.ascent-facts div { display: flex; gap: 0.6rem; }
+.ascent-facts dt { color: var(--muted); }
+.ascent-facts dd { margin: 0; }
+.ascent-text { margin: 0; white-space: pre-wrap; font-size: 1.45rem; line-height: 1.55; overflow-wrap: anywhere; }
+.ascent-form { gap: 1.4rem; }
+.ascent-form-row { display: flex; flex-wrap: wrap; gap: 1.6rem 3.2rem; }
