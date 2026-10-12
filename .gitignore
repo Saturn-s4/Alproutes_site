@@ -20,3 +20,6 @@ id_ecdsa*
 *.ppk
 homelaptopGIT*
 olennikovgitkey*
+
+# Scratch output of Claude sessions (previews etc.), not part of the project
+Claude outputs/

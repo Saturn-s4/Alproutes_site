@@ -1176,6 +1176,7 @@ paths:
       tags: [ascents]
       operationId: listRouteAscents
       summary: Восхождения по маршруту (публичные)
+      description: Публичные записи, свежие (по дате восхождения) сверху; автор видит и свои приватные.
       security: [{}, { bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/Cursor'
@@ -1250,7 +1251,8 @@ paths:
     delete:
       tags: [ascents]
       operationId: deleteAscent
-      summary: Удалить запись (автор)
+      summary: Удалить запись (автор или модератор)
+      description: Фото восхождения удаляются вместе с записью.
       responses:
         '204': { description: Удалено }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1284,6 +1286,9 @@ paths:
       tags: [comments]
       operationId: listRouteComments
       summary: Комментарии к маршруту
+      description: |
+        Плоский список по времени создания (старые сверху); ответы клиент группирует по `parentId`.
+        Скрытые модератором видят только модераторы, удалённые остаются заглушками.
       security: [{}, { bearerAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/Cursor'
@@ -1371,8 +1376,10 @@ paths:
     delete:
       tags: [comments]
       operationId: deleteComment
-      summary: Удалить комментарий (автор)
-      description: В ветке остаётся заглушка `isDeleted = true` без текста, чтобы не рвать ответы.
+      summary: Удалить комментарий (автор или модератор)
+      description: |
+        В ветке остаётся заглушка `isDeleted = true` без текста, чтобы не рвать ответы.
+        Фото комментария удаляются вместе с ним (и из галереи маршрута).
       responses:
         '204': { description: Удалено }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -2369,6 +2376,7 @@ components:
         routeId: { type: string, format: uuid, nullable: true }
         areaId: { type: string, format: uuid, nullable: true }
         ascentId: { type: string, format: uuid, nullable: true }
+        commentId: { type: string, format: uuid, nullable: true, description: Комментарий, к которому прикреплено фото }
         author: { $ref: '#/components/schemas/UserPublic' }
         kind: { $ref: '#/components/schemas/PhotoKind' }
         widthPx: { type: integer, nullable: true, description: С учётом EXIF-ориентации }
@@ -2433,12 +2441,18 @@ components:
           type: string
           enum: [main, variant, approach, descent]
           description: Основная нитка, вариант, подход, спуск
-        dashed:
+        pattern:
+          type: string
+          enum: [solid, dashed, dash_dot, dotted]
+          default: solid
+          description: |
+            Узор линии, независим от `style`: сплошная; штрих; штрих-пунктир (обычно вариант);
+            точки (участок не виден с точки съёмки). Длины штрихов — из
+            `shared/topo-symbols/symbols.json` (`lines`: route, variant, hidden), в долях толщины линии.
+        arrowEnd:
           type: boolean
           default: false
-          description: |
-            Пунктир вместо сплошной (например, участок не виден с точки съёмки или
-            проходится по-разному). Независим от `style`.
+          description: Стрелка на последней точке (направление движения, выход за край кадра)
         smooth:
           type: boolean
           default: true
@@ -2454,15 +2468,34 @@ components:
           items: { $ref: '#/components/schemas/TopoPoint' }
     TopoMarker:
       type: object
-      required: [x, y, kind]
+      description: |
+        Условный знак на фото — центр символа в точке (x, y). Размер знака — 5 % меньшей стороны
+        изображения, умноженные на `scale`; подпись — справа от знака, того же масштаба.
+        Так рисунок одинаков на всех клиентах.
+      required: [x, y, symbol]
       properties:
         x: { type: number, format: double, minimum: 0, maximum: 1 }
         y: { type: number, format: double, minimum: 0, maximum: 1 }
-        kind:
+        symbol:
           type: string
-          enum: [belay, crux, bivouac, rappel, key_point]
-          description: Станция, ключевой участок, ночёвка, дюльфер, ориентир
-        label: { type: string, maxLength: 50, example: R3 }
+          pattern: '^[a-z][a-z0-9_]{0,39}$'
+          example: belay_good
+          description: |
+            Id символа из `shared/topo-symbols/symbols.json` (общий набор для веба и Android).
+            Клиент, не знающий символ (набор пополняется), его не рисует, остальной рисунок — рисует.
+        rotation:
+          type: number
+          minimum: 0
+          exclusiveMaximum: 360
+          default: 0
+          description: Поворот символа по часовой стрелке, градусы (для направленных — дюльфер, маятник)
+        scale:
+          type: number
+          minimum: 0.25
+          maximum: 4
+          default: 1
+          description: Масштаб знака относительно стандартного размера
+        label: { type: string, maxLength: 50, example: R3, description: Короткая подпись рядом со знаком }
     TopoLabel:
       type: object
       description: Подпись участка
@@ -2672,7 +2705,9 @@ components:
     # ------------------------------------------------------------ ascents
     AscentMember:
       type: object
-      description: Участник группы помимо автора. Зарегистрированный (userId) или просто по имени.
+      description: |
+        Участник группы помимо автора. Зарегистрированный (userId) или просто по имени —
+        хотя бы одно из двух. Имена третьих лиц публичны вместе с записью (кроме приватной).
       properties:
         userId: { type: string, format: uuid, nullable: true }
         user: { $ref: '#/components/schemas/UserPublic' }
@@ -2685,7 +2720,9 @@ components:
         ascentDate:
           type: string
           format: date
-          description: При точности month/year — первое число периода (1985-07-01, 1985-01-01)
+          description: |
+            При точности month/year — первое число периода (1985-07-01, 1985-01-01); сервер
+            приводит к нему сам. Не позже сегодняшнего дня и не раньше 1850 года.
         datePrecision: { type: string, enum: [day, month, year] }
         outcome:
           type: string
@@ -2695,7 +2732,10 @@ components:
         conditions: { type: string, nullable: true, maxLength: 5000 }
         report: { type: string, nullable: true, maxLength: 20000 }
         language: { $ref: '#/components/schemas/LanguageCode' }
-        isPrivate: { type: boolean, default: false }
+        isPrivate:
+          type: boolean
+          default: false
+          description: Приватную запись видит только автор; в счётчик восхождений маршрута она не входит.
         members:
           type: array
           maxItems: 30
@@ -2711,11 +2751,17 @@ components:
       allOf:
         - $ref: '#/components/schemas/AscentFields'
         - type: object
-          required: [id, routeId, user, createdAt, updatedAt]
+          required: [id, routeId, user, photos, createdAt, updatedAt]
           properties:
             id: { type: string, format: uuid }
             routeId: { type: string, format: uuid }
             route: { $ref: '#/components/schemas/RouteSummary' }
+            photos:
+              type: array
+              description: |
+                Фото восхождения (`Photo.ascentId`), старые сверху. Загружаются после создания записи:
+                `POST /routes/{routeId}/photos` с `ascentId`. Чужие — только готовые и не скрытые.
+              items: { $ref: '#/components/schemas/Photo' }
             user: { $ref: '#/components/schemas/UserPublic' }
             createdAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }
@@ -2731,7 +2777,7 @@ components:
     # ----------------------------------------------------------- comments
     Comment:
       type: object
-      required: [id, author, createdAt, isDeleted]
+      required: [id, author, photos, createdAt, isDeleted]
       properties:
         id: { type: string, format: uuid }
         author: { $ref: '#/components/schemas/UserPublic' }
@@ -2740,12 +2786,19 @@ components:
         parentId: { type: string, format: uuid, nullable: true }
         body: { type: string, nullable: true, description: null у удалённого комментария }
         language: { $ref: '#/components/schemas/LanguageCode' }
+        photos:
+          type: array
+          description: |
+            Фото комментария в порядке прикрепления. Чужие — только готовые и не скрытые, свои — в любом
+            статусе. У удалённого комментария пусто. Те же фото есть в галерее маршрута.
+          items: { $ref: '#/components/schemas/Photo' }
         isDeleted: { type: boolean }
         createdAt: { type: string, format: date-time }
         editedAt: { type: string, format: date-time, nullable: true }
     CommentCreate:
       type: object
       required: [id, body]
+      description: Текст обязателен и при фото — подпись к ним.
       properties:
         id: { type: string, format: uuid, description: Генерируется клиентом }
         body: { type: string, minLength: 1, maxLength: 5000 }
@@ -2754,6 +2807,15 @@ components:
           format: uuid
           description: Ответ на комментарий верхнего уровня того же объекта (один уровень вложенности)
         language: { $ref: '#/components/schemas/LanguageCode' }
+        photoIds:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          description: |
+            Фото к комментарию маршрута: свои, заранее загруженные к этому же маршруту
+            (`POST /routes/{routeId}/photos`) и ещё не прикреплённые к другому комментарию.
+            Для комментария к восхождению не поддерживается.
+          items: { type: string, format: uuid }
     CommentUpdate:
       type: object
       required: [body]

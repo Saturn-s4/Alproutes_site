@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { Ascents } from '@/components/Ascents';
+import { Comments } from '@/components/Comments';
 import { Crumbs } from '@/components/Crumbs';
 import { DescriptionPhotos } from '@/components/DescriptionPhotos';
 import { Documents } from '@/components/Documents';
@@ -39,12 +41,14 @@ export default async function RoutePage({ params }: Props) {
   const t = translator(lang);
   const route = await loadRoute((await params).slug);
   const description = loc(route.description, lang);
-  const [userPhotos, documents, tracks] = await Promise.all([
+  const [userPhotos, documents, tracks, comments, ascents] = await Promise.all([
     serverApi.GET('/routes/{routeId}/photos', { params: { path: { routeId: route.id }, query: { inDescription: false, limit: 24 } } }),
     serverApi.GET('/routes/{routeId}/documents', { params: { path: { routeId: route.id }, query: { limit: 50 } } }),
     serverApi.GET('/routes/{routeId}/tracks', { params: { path: { routeId: route.id }, query: { limit: 50 } } }),
+    serverApi.GET('/routes/{routeId}/comments', { params: { path: { routeId: route.id }, query: { limit: 50 } } }),
+    serverApi.GET('/routes/{routeId}/ascents', { params: { path: { routeId: route.id }, query: { limit: 20 } } }),
   ]);
-  if (!userPhotos.data || !documents.data || !tracks.data) throw new Error('Route media request failed');
+  if (!userPhotos.data || !documents.data || !tracks.data || !comments.data || !ascents.data) throw new Error('Route media request failed');
   const trackIds = tracks.data.items.map((x) => x.id);
 
   return (
@@ -63,7 +67,6 @@ export default async function RoutePage({ params }: Props) {
 
       <div className="route-cols">
         <div className="route-main">
-          <Disclaimer t={t} />
           <section className="prose">
             <h2 className="h2">{t('route.description')}</h2>
             {description ? (
@@ -85,6 +88,19 @@ export default async function RoutePage({ params }: Props) {
           <section className="route-section">
             <h2 className="h2">{t('route.archive')} · <span className="mono">{documents.data.items.length}</span></h2>
             <Documents routeId={route.id} documents={documents.data.items} />
+          </section>
+
+          {/* Required on every route page (CLAUDE.md, section 8): after the route's own material, before climbers' content. */}
+          <Disclaimer t={t} />
+
+          <section className="route-section" id="comments">
+            <h2 className="h2">{t('cm.title')} · <span className="mono">{route.stats?.commentCount ?? comments.data.items.filter((c) => !c.isDeleted).length}</span></h2>
+            <Comments routeId={route.id} initial={comments.data.items} nextCursor={comments.data.nextCursor ?? null} />
+          </section>
+
+          <section className="route-section" id="ascents">
+            <h2 className="h2">{t('route.ascents')} · <span className="mono">{route.stats?.ascentCount ?? ascents.data.items.length}</span></h2>
+            <Ascents routeId={route.id} initial={ascents.data.items} nextCursor={ascents.data.nextCursor ?? null} />
           </section>
 
           <section className="route-section">
