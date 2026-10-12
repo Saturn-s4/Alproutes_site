@@ -675,10 +675,7 @@ p { margin: 0; }
 .nodata { color: var(--faint); font-style: italic; font-family: var(--font-body); font-size: 0.9em; }
 .fallback-note { font-size: 1.1rem; color: var(--faint); margin-left: 0.6rem; font-family: var(--font-mono); }
 
-.disclaimer {
-  display: flex; flex-direction: column; gap: 0.4rem; padding: 1.2rem 1.4rem; border-radius: 0.8rem;
-  border: 1px solid var(--accent); background: var(--accent-soft); font-size: 1.3rem; color: var(--text2);
-}
+.disclaimer { display: flex; flex-direction: column; gap: 0.4rem; font-size: 1.3rem; color: var(--text2); }
 .disclaimer b { color: var(--accent-text); font-size: 1.2rem; letter-spacing: 0.08em; text-transform: uppercase; }
 
 .status-note { padding: 1rem 1.4rem; border-radius: 0.8rem; background: var(--blue-soft); color: var(--blue-text); font-size: 1.4rem; }

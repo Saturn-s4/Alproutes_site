@@ -79,13 +79,6 @@ export default async function RoutePage({ params }: Props) {
             )}
           </section>
           <DescriptionPhotos photos={route.descriptionPhotos} refs={route.photos ?? []} routeId={route.id} />
-          {/* Required on every route page (CLAUDE.md, section 8): right after the description, before user content. */}
-          <Disclaimer t={t} />
-
-          <section className="route-section" id="ascents">
-            <h2 className="h2">{t('route.ascents')} · <span className="mono">{route.stats?.ascentCount ?? ascents.data.items.length}</span></h2>
-            <Ascents routeId={route.id} initial={ascents.data.items} nextCursor={ascents.data.nextCursor ?? null} />
-          </section>
 
           <section className="route-section">
             <h2 className="h2">{t('trk.title')} · <span className="mono">{tracks.data.items.length}</span></h2>
@@ -97,14 +90,22 @@ export default async function RoutePage({ params }: Props) {
             <Documents routeId={route.id} documents={documents.data.items} />
           </section>
 
-          <section className="route-section">
-            <h2 className="h2">{t('route.userPhotos')}</h2>
-            <UserPhotos routeId={route.id} initial={userPhotos.data.items} nextCursor={userPhotos.data.nextCursor ?? null} />
-          </section>
+          {/* Required on every route page (CLAUDE.md, section 8): after the route's own material, before climbers' content. */}
+          <Disclaimer t={t} />
 
           <section className="route-section" id="comments">
             <h2 className="h2">{t('cm.title')} · <span className="mono">{route.stats?.commentCount ?? comments.data.items.filter((c) => !c.isDeleted).length}</span></h2>
             <Comments routeId={route.id} initial={comments.data.items} nextCursor={comments.data.nextCursor ?? null} />
+          </section>
+
+          <section className="route-section" id="ascents">
+            <h2 className="h2">{t('route.ascents')} · <span className="mono">{route.stats?.ascentCount ?? ascents.data.items.length}</span></h2>
+            <Ascents routeId={route.id} initial={ascents.data.items} nextCursor={ascents.data.nextCursor ?? null} />
+          </section>
+
+          <section className="route-section">
+            <h2 className="h2">{t('route.userPhotos')}</h2>
+            <UserPhotos routeId={route.id} initial={userPhotos.data.items} nextCursor={userPhotos.data.nextCursor ?? null} />
           </section>
         </div>
 
