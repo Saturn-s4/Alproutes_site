@@ -79,6 +79,8 @@ export default async function RoutePage({ params }: Props) {
             )}
           </section>
           <DescriptionPhotos photos={route.descriptionPhotos} refs={route.photos ?? []} routeId={route.id} />
+          {/* Required on every route page (CLAUDE.md, section 8): right after the description, before user content. */}
+          <Disclaimer t={t} />
 
           <section className="route-section" id="ascents">
             <h2 className="h2">{t('route.ascents')} · <span className="mono">{route.stats?.ascentCount ?? ascents.data.items.length}</span></h2>
@@ -104,9 +106,6 @@ export default async function RoutePage({ params }: Props) {
             <h2 className="h2">{t('cm.title')} · <span className="mono">{route.stats?.commentCount ?? comments.data.items.filter((c) => !c.isDeleted).length}</span></h2>
             <Comments routeId={route.id} initial={comments.data.items} nextCursor={comments.data.nextCursor ?? null} />
           </section>
-
-          {/* Required on every route page (CLAUDE.md, section 8); placed after all route content. */}
-          <Disclaimer t={t} />
         </div>
 
         <aside className="route-aside">
