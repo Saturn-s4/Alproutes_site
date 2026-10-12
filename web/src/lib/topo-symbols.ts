@@ -1,6 +1,7 @@
 import { TOPO_SYMBOL_SET } from './topo-symbols.data';
 import type { TopoDrawing } from './topo';
 
+
 /**
  * Topo symbols (UIAA-style) for drawings on photos. Data lives in shared/topo-symbols/symbols.json,
  * shared with Android; topo-symbols.data.ts is generated from it by shared/topo-symbols/build.mjs.
@@ -37,17 +38,24 @@ export function topoSymbolPalette(includeHumor = false) {
     .filter((x) => x.symbols.length > 0);
 }
 
-/**
- * Symbol for each marker kind the contract knows today (TopoMarker.kind). Lets clients draw
- * markers with these glyphs before the contract carries a symbol id of its own.
- */
-export const MARKER_KIND_SYMBOL: Record<NonNullable<TopoDrawing['markers']>[number]['kind'], TopoSymbolId> = {
-  belay: 'belay_good',
-  crux: 'crux',
-  bivouac: 'bivouac_good',
-  rappel: 'rappel',
-  key_point: 'cairn',
+export type TopoPattern = NonNullable<TopoDrawing['paths'][number]['pattern']>;
+
+/** Which line style of the symbol set draws each contract pattern (TopoPath.pattern). */
+export const PATTERN_LINE_STYLE: Record<Exclude<TopoPattern, 'solid'>, TopoLineStyleDef['id']> = {
+  dashed: 'route',
+  dash_dot: 'variant',
+  dotted: 'hidden',
 };
+
+/** stroke-dasharray of a contract pattern at [strokeWidth]; undefined for a solid line. */
+export function patternDash(pattern: TopoPattern | undefined, strokeWidth: number): string | undefined {
+  if (!pattern || pattern === 'solid') return undefined;
+  const style = TOPO_LINE_STYLES.find((l) => l.id === PATTERN_LINE_STYLE[pattern]);
+  return style ? topoLineDash(style, strokeWidth) : undefined;
+}
+
+/** Marker size as a share of the image's shorter side (contract TopoMarker). */
+export const MARKER_SIZE = 0.05;
 
 /** SVG stroke-dasharray for a line style at [strokeWidth]; undefined for a solid line. */
 export function topoLineDash(style: TopoLineStyleDef, strokeWidth: number): string | undefined {

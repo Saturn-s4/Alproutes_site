@@ -203,9 +203,10 @@ class MediaTest : IntegrationTest() {
         val routeId = post("/routes", mod, mapOf("content" to content(createArea(mod)), "publish" to true)).expect(201).json["routeId"].asText()
         val photoId = readyPhoto(user, routeId)
         val versions = "/photos/$photoId/topo-lines/$routeId/versions"
-        fun drawing(x: Double = 0.2, dashed: Boolean = false) = mapOf(
+        fun drawing(x: Double = 0.2, pattern: String = "solid", symbol: String = "belay_good") = mapOf(
             "formatVersion" to 1,
-            "paths" to listOf(mapOf("id" to "p1", "style" to "main", "dashed" to dashed,
+            "markers" to listOf(mapOf("x" to 0.5, "y" to 0.5, "symbol" to symbol, "rotation" to 90, "label" to "R1")),
+            "paths" to listOf(mapOf("id" to "p1", "style" to "main", "pattern" to pattern, "arrowEnd" to (pattern == "dotted"),
                 "points" to listOf(mapOf("x" to x, "y" to 0.9), mapOf("x" to 0.5, "y" to 0.5), mapOf("x" to 0.6, "y" to 0.1)))),
             "labels" to listOf(mapOf("x" to 0.5, "y" to 0.5, "text" to "Ключ (тест)", "pathId" to "p1")),
         )
@@ -218,10 +219,17 @@ class MediaTest : IntegrationTest() {
         assertEquals("drawing.paths[0].points[0]", bad.json["errors"][0]["field"].asText())
         post(versions, user, mapOf("drawing" to drawing(), "publish" to true)).expect(403)
 
-        val v1 = post(versions, user, mapOf("drawing" to drawing(dashed = true))).expect(201).json
+        val badSymbol = post(versions, user, mapOf("drawing" to drawing(symbol = "Belay Good"))).expect(400)
+        assertEquals("drawing.markers[0].symbol", badSymbol.json["errors"][0]["field"].asText())
+        post(versions, user, mapOf("drawing" to drawing(pattern = "wavy"))).expect(400)
+
+        val v1 = post(versions, user, mapOf("drawing" to drawing(pattern = "dotted"))).expect(201).json
         assertEquals(1, v1["version"].asInt())
         assertEquals("pending", v1["status"].asText())
-        assertTrue(v1["drawing"]["paths"][0]["dashed"].asBoolean())
+        assertEquals("dotted", v1["drawing"]["paths"][0]["pattern"].asText())
+        assertTrue(v1["drawing"]["paths"][0]["arrowEnd"].asBoolean())
+        assertEquals("belay_good", v1["drawing"]["markers"][0]["symbol"].asText())
+        assertEquals(90.0, v1["drawing"]["markers"][0]["rotation"].asDouble())
         assertTrue(v1["drawing"]["paths"][0]["smooth"].asBoolean())
 
         // A second first version is a conflict: the base is now v1.

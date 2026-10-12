@@ -45,6 +45,23 @@ export function topoPathD(points: { x: number; y: number }[], w: number, h: numb
   return d;
 }
 
+/**
+ * Direction the line arrives at its last point, in image pixels: the last Bézier tangent of the
+ * spline (or the last segment of a polyline). For the end arrow (TopoPath.arrowEnd).
+ */
+export function endDirection(points: { x: number; y: number }[], w: number, h: number, smooth = true): [number, number] | null {
+  const p: Pt[] = points.map((q) => [q.x * w, q.y * h]);
+  const n = p.length;
+  if (n < 2) return null;
+  const end = p[n - 1]!;
+  let from = p[n - 2]!;
+  if (smooth && n >= 3) from = bezierControls(p[n - 3]!, p[n - 2]!, end, end)[0];
+  const dx = end[0] - from[0];
+  const dy = end[1] - from[1];
+  const len = Math.hypot(dx, dy);
+  return len ? [dx / len, dy / len] : null;
+}
+
 /** Bézier control points of the centripetal Catmull–Rom segment p1→p2 (Yuksel et al.). */
 function bezierControls(p0: Pt, p1: Pt, p2: Pt, p3: Pt): [Pt, Pt] {
   const dist = (a: Pt, b: Pt) => Math.hypot(b[0] - a[0], b[1] - a[1]);

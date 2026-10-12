@@ -2441,12 +2441,18 @@ components:
           type: string
           enum: [main, variant, approach, descent]
           description: Основная нитка, вариант, подход, спуск
-        dashed:
+        pattern:
+          type: string
+          enum: [solid, dashed, dash_dot, dotted]
+          default: solid
+          description: |
+            Узор линии, независим от `style`: сплошная; штрих; штрих-пунктир (обычно вариант);
+            точки (участок не виден с точки съёмки). Длины штрихов — из
+            `shared/topo-symbols/symbols.json` (`lines`: route, variant, hidden), в долях толщины линии.
+        arrowEnd:
           type: boolean
           default: false
-          description: |
-            Пунктир вместо сплошной (например, участок не виден с точки съёмки или
-            проходится по-разному). Независим от `style`.
+          description: Стрелка на последней точке (направление движения, выход за край кадра)
         smooth:
           type: boolean
           default: true
@@ -2462,15 +2468,27 @@ components:
           items: { $ref: '#/components/schemas/TopoPoint' }
     TopoMarker:
       type: object
-      required: [x, y, kind]
+      description: |
+        Условный знак на фото — центр символа в точке (x, y). Размер знака — 5 % меньшей стороны
+        изображения, подпись — справа от знака; так рисунок одинаков на всех клиентах.
+      required: [x, y, symbol]
       properties:
         x: { type: number, format: double, minimum: 0, maximum: 1 }
         y: { type: number, format: double, minimum: 0, maximum: 1 }
-        kind:
+        symbol:
           type: string
-          enum: [belay, crux, bivouac, rappel, key_point]
-          description: Станция, ключевой участок, ночёвка, дюльфер, ориентир
-        label: { type: string, maxLength: 50, example: R3 }
+          pattern: '^[a-z][a-z0-9_]{0,39}$'
+          example: belay_good
+          description: |
+            Id символа из `shared/topo-symbols/symbols.json` (общий набор для веба и Android).
+            Клиент, не знающий символ (набор пополняется), его не рисует, остальной рисунок — рисует.
+        rotation:
+          type: number
+          minimum: 0
+          exclusiveMaximum: 360
+          default: 0
+          description: Поворот символа по часовой стрелке, градусы (для направленных — дюльфер, маятник)
+        label: { type: string, maxLength: 50, example: R3, description: Короткая подпись рядом со знаком }
     TopoLabel:
       type: object
       description: Подпись участка

@@ -924,7 +924,8 @@ a.chip[aria-pressed='true'] { border-color: var(--accent); background: var(--acc
 .topo-sep { width: 1px; height: 2.8rem; background: #2a2a2e; }
 .topo-swatch { display: inline-block; width: 1.2rem; height: 1.2rem; border-radius: 50%; margin-right: 0.6rem; vertical-align: -0.1rem; }
 .topo-editor .chip { display: inline-flex; align-items: center; gap: 0.6rem; }
-.topo-stage { flex-grow: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 1.6rem; }
+.topo-body { flex-grow: 1; min-height: 0; display: flex; }
+.topo-stage { flex-grow: 1; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 1.6rem; }
 .topo-canvas { position: relative; max-width: 100%; max-height: 100%; height: 100%; }
 .topo-canvas img { display: block; width: 100%; height: 100%; user-select: none; }
 .topo-input { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; overflow: visible; }
@@ -983,3 +984,23 @@ a.chip[aria-pressed='true'] { border-color: var(--accent); background: var(--acc
 .ascent-text { margin: 0; white-space: pre-wrap; font-size: 1.45rem; line-height: 1.55; overflow-wrap: anywhere; }
 .ascent-form { gap: 1.4rem; }
 .ascent-form-row { display: flex; flex-wrap: wrap; gap: 1.6rem 3.2rem; }
+
+/* Topo symbols */
+.topo-label { fill: #fff; stroke: rgba(0, 0, 0, 0.7); stroke-width: 0.18em; paint-order: stroke; font-family: var(--font-display, sans-serif);
+  font-weight: 700; dominant-baseline: middle; }
+.topo-input.tool-symbol { cursor: copy; }
+.topo-marker-hit { fill: transparent; stroke: transparent; stroke-width: 2; cursor: grab; }
+.topo-marker-hit:hover, .topo-marker-hit.selected { stroke: #fff; stroke-dasharray: 4 3; }
+.topo-palette { width: 26rem; flex-shrink: 0; overflow-y: auto; padding: 1.2rem 1.4rem; border-right: 1px solid #2a2a2e; background: #141416; }
+.topo-palette h3 { margin: 1.2rem 0 0.6rem; font-size: 1.2rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #a0a0a8; }
+.topo-palette h3:first-child { margin-top: 0; }
+.topo-palette-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
+.topo-palette-grid button { display: flex; align-items: center; gap: 0.8rem; padding: 0.6rem; border: 1px solid transparent; border-radius: 0.8rem;
+  background: none; color: #e8e8ec; font-size: 1.2rem; text-align: left; cursor: pointer; }
+.topo-palette-grid button:hover { background: #1f1f23; }
+.topo-palette-grid button[aria-pressed='true'] { border-color: #ff7a1a; background: rgba(255, 122, 26, 0.12); }
+.topo-palette-grid button svg { flex-shrink: 0; }
+.topo-palette-grid button span { overflow: hidden; text-overflow: ellipsis; }
+.topo-humor { margin-top: 1.2rem; font-size: 1.2rem; }
+.topo-marker-props { display: flex; align-items: center; gap: 0.6rem; }
+.topo-marker-props .input { width: 16rem; height: 3.4rem; }

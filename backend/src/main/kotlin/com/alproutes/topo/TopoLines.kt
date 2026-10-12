@@ -45,12 +45,13 @@ data class TopoPoint(val x: Double, val y: Double)
 data class TopoPath(
     val id: String,
     val style: String,
-    val dashed: Boolean = false,
+    val pattern: String = "solid",
+    val arrowEnd: Boolean = false,
     val smooth: Boolean = true,
     val points: List<TopoPoint>,
 )
 
-data class TopoMarker(val x: Double, val y: Double, val kind: String, val label: String? = null)
+data class TopoMarker(val x: Double, val y: Double, val symbol: String, val rotation: Double = 0.0, val label: String? = null)
 
 data class TopoLabel(val x: Double, val y: Double, val text: String, val pathId: String? = null)
 
@@ -64,7 +65,9 @@ data class TopoDrawing(
 data class TopoLineCreate(val baseVersionId: UUID? = null, val drawing: TopoDrawing, val publish: Boolean = false)
 
 private val STYLES = setOf("main", "variant", "approach", "descent")
-private val MARKER_KINDS = setOf("belay", "crux", "bivouac", "rappel", "key_point")
+private val PATTERNS = setOf("solid", "dashed", "dash_dot", "dotted")
+/** Symbol ids come from shared/topo-symbols/symbols.json; the set grows, so only the shape is checked here. */
+private val SYMBOL_ID = Regex("^[a-z][a-z0-9_]{0,39}$")
 
 /** Mirrors the contract limits; the stored JSON is re-serialized from these classes, so unknown keys are dropped. */
 internal fun validateDrawing(d: TopoDrawing) = validate {
@@ -77,13 +80,15 @@ internal fun validateDrawing(d: TopoDrawing) = validate {
         check(p.id.isNotBlank() && p.id.length <= 36, "$f.id", "Непустой, до 36 символов")
         check(ids.add(p.id), "$f.id", "id линии повторяется")
         check(p.style in STYLES, "$f.style", "Допустимые значения: ${STYLES.joinToString()}")
+        check(p.pattern in PATTERNS, "$f.pattern", "Допустимые значения: ${PATTERNS.joinToString()}")
         check(p.points.size in 2..2000, "$f.points", "От 2 до 2000 точек")
         p.points.forEachIndexed { j, pt -> point(pt.x, pt.y, "$f.points[$j]") }
     }
     check(d.markers.size <= 200, "drawing.markers", "Не больше 200 отметок")
     d.markers.forEachIndexed { i, m ->
         point(m.x, m.y, "drawing.markers[$i]")
-        check(m.kind in MARKER_KINDS, "drawing.markers[$i].kind", "Допустимые значения: ${MARKER_KINDS.joinToString()}")
+        check(SYMBOL_ID.matches(m.symbol), "drawing.markers[$i].symbol", "Id символа из общего набора")
+        check(m.rotation.isFinite() && m.rotation >= 0.0 && m.rotation < 360.0, "drawing.markers[$i].rotation", "От 0 до 360 градусов")
         m.label?.let { check(it.length <= 50, "drawing.markers[$i].label", "До 50 символов") }
     }
     check(d.labels.size <= 200, "drawing.labels", "Не больше 200 подписей")
