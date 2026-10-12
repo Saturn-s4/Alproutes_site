@@ -24,6 +24,10 @@ const MAX_POINTS = 2000;
 const MAX_PATHS = 20;
 const MAX_MARKERS = 200;
 const PATTERNS: TopoPattern[] = ['solid', 'dashed', 'dash_dot', 'dotted'];
+/** Contract limits of TopoMarker.scale. */
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 4;
+const clampScale = (v: number) => Math.round(Math.min(MAX_SCALE, Math.max(MIN_SCALE, v)) * 100) / 100;
 
 /**
  * Full-screen editor of one route's line on one photo.
@@ -51,9 +55,14 @@ export function TopoEditor({
   // Refs hold the latest values for pointer handlers: events can arrive faster than React re-renders.
   const picRef = useRef(pic);
   const strokeRef = useRef<Pt[] | null>(null);
-  const drag = useRef<{ target: Exclude<Selection, null>; index: number; moved: boolean } | null>(null);
-  /** The click that ends a drag must not deselect what was dragged. */
-  const justDragged = useRef(false);
+  const drag = useRef<
+    { target: Exclude<Selection, null>; index: number; moved: boolean; resize?: { base: number; scale: number } } | null
+  >(null);
+  /**
+   * The click that ends a press on a symbol or a handle must not deselect it: with the pointer
+   * captured by the canvas, that click lands on the canvas itself.
+   */
+  const suppressClick = useRef(false);
   // Section labels are not edited here yet; they are kept as they were.
   const labels = initial?.labels;
 
@@ -133,7 +142,7 @@ export function TopoEditor({
     if (tool === 'symbol') {
       if (picRef.current.markers.length >= MAX_MARKERS) return;
       const at = norm(toImage(e));
-      commit((p) => ({ ...p, markers: [...p.markers, { ...at, symbol, rotation: 0 }] }));
+      commit((p) => ({ ...p, markers: [...p.markers, { ...at, symbol, rotation: 0, scale: 1 }] }));
       return;
     }
     if (tool !== 'draw' || picRef.current.paths.length >= MAX_PATHS) return;
@@ -157,7 +166,15 @@ export function TopoEditor({
     const at = norm(toImage(e));
     d.moved = true;
     const cur = picRef.current;
-    if (d.target.kind === 'marker') {
+    if (d.target.kind === 'marker' && d.resize) {
+      // Scale follows the pointer's distance from the symbol's centre.
+      const m = cur.markers[d.index];
+      if (!m) return;
+      const [px, py] = toImage(e);
+      const dist = Math.hypot(px - m.x * w, py - m.y * h);
+      const next = clampScale(d.resize.scale * (dist / d.resize.base));
+      show({ ...cur, markers: cur.markers.map((x, i) => (i === d.index ? { ...x, scale: next } : x)) });
+    } else if (d.target.kind === 'marker') {
       show({ ...cur, markers: cur.markers.map((m, i) => (i === d.index ? { ...m, ...at } : m)) });
     } else {
       const id = d.target.id;
@@ -182,20 +199,27 @@ export function TopoEditor({
         commit((p) => ({ ...p, paths: [...p.paths, line] }));
       }
     }
-    justDragged.current = drag.current?.moved ?? false;
+    suppressClick.current = drag.current !== null;
     drag.current = null;
   };
 
   // ------------------------------------------------------------------ editing
 
-  const startDrag = (e: ReactPointerEvent, target: Exclude<Selection, null>, index: number) => {
-    if (tool !== 'edit') return;
+  const startDrag = (e: ReactPointerEvent, target: Exclude<Selection, null>, index: number, resize = false) => {
+    // Symbols are picked in the symbol tool too: a click on one selects it instead of stacking another.
+    if (tool !== 'edit' && !(tool === 'symbol' && target.kind === 'marker')) return;
     e.stopPropagation();
     if (svgRef.current) capture(svgRef.current, e.pointerId);
     // Snapshot for undo before the first move.
     const prev = picRef.current;
     setHistory((hs) => [...hs.slice(-49), prev]);
-    drag.current = { target, index, moved: false };
+    let resizeFrom: { base: number; scale: number } | undefined;
+    if (resize && target.kind === 'marker') {
+      const m = prev.markers[index]!;
+      const [px, py] = toImage(e);
+      resizeFrom = { base: Math.max(Math.hypot(px - m.x * w, py - m.y * h), 1), scale: m.scale ?? 1 };
+    }
+    drag.current = { target, index, moved: false, resize: resizeFrom };
     setSel(target);
   };
 
@@ -232,6 +256,11 @@ export function TopoEditor({
 
   return (
     <div className="topo-editor" role="dialog" aria-modal="true" aria-label={t('topo.title')}>
+      {/*
+        Two rows of fixed height: the first never changes, the second shows the settings of what is
+        being drawn or selected. Nothing above the photo grows or wraps, so the photo never moves
+        under the pointer between two clicks.
+      */}
       <div className="topo-toolbar">
         <div className="chips">
           <button type="button" className="chip chip-lg" aria-pressed={tool === 'draw'} onClick={() => pickTool('draw')}>✎ {t('topo.draw')}</button>
@@ -241,24 +270,51 @@ export function TopoEditor({
           <button type="button" className="chip chip-lg" aria-pressed={tool === 'edit'} onClick={() => setTool('edit')}>⤧ {t('topo.edit')}</button>
         </div>
         <span className="topo-sep" />
-        {(tool === 'draw' || selPath) && (
+        <button type="button" className="btn btn-sm btn-ghost" onClick={undo} disabled={!history.length}>↶ {t('topo.undo')}</button>
+        <button type="button" className="btn btn-sm btn-ghost" onClick={removeSelected} disabled={!sel}>
+          {selMarker ? t('topo.deleteSymbol') : t('topo.deleteLine')}
+        </button>
+        <span style={{ flexGrow: 1 }} />
+        <button type="button" className="btn btn-ghost" onClick={onClose}>{t('geo.cancel')}</button>
+        <button type="button" className="btn btn-primary" onClick={save}>{t('topo.done')}</button>
+      </div>
+      <div className="topo-context">
+        {selMarker ? (
+          <div className="topo-marker-props">
+            <TopoSymbolIcon id={selMarker.symbol} size={22} />
+            <span>{symbolLabel(selMarker.symbol, lang)}</span>
+            <input className="input" maxLength={50} placeholder={t('topo.markerLabel')} value={selMarker.label ?? ''}
+              onChange={(e) => setMarker({ label: e.target.value || undefined })} />
+            <span className="topo-sep" />
+            <button type="button" className="btn btn-sm btn-ghost" title={t('topo.rotate')}
+              onClick={() => setMarker({ rotation: ((selMarker.rotation ?? 0) + 315) % 360 })}>↺</button>
+            <button type="button" className="btn btn-sm btn-ghost" title={t('topo.rotate')}
+              onClick={() => setMarker({ rotation: ((selMarker.rotation ?? 0) + 45) % 360 })}>↻</button>
+            <span className="topo-sep" />
+            <button type="button" className="btn btn-sm btn-ghost" title={t('topo.smaller')} disabled={(selMarker.scale ?? 1) <= MIN_SCALE}
+              onClick={() => setMarker({ scale: clampScale((selMarker.scale ?? 1) - 0.25) })}>−</button>
+            <span className="mono topo-scale">{Math.round((selMarker.scale ?? 1) * 100)}%</span>
+            <button type="button" className="btn btn-sm btn-ghost" title={t('topo.bigger')} disabled={(selMarker.scale ?? 1) >= MAX_SCALE}
+              onClick={() => setMarker({ scale: clampScale((selMarker.scale ?? 1) + 0.25) })}>+</button>
+          </div>
+        ) : tool === 'draw' || selPath ? (
           <>
             <div className="chips">
-              {TOPO_STYLES.map((s) => (
-                <button key={s} type="button" className="chip chip-lg" aria-pressed={current.style === s} onClick={() => setProp({ style: s })}>
-                  <span className="topo-swatch" style={{ background: TOPO_COLORS[s] }} />{topoStyleLabel(s, lang)}
+              {TOPO_STYLES.map((st) => (
+                <button key={st} type="button" className="chip chip-lg" aria-pressed={current.style === st} onClick={() => setProp({ style: st })}>
+                  <span className="topo-swatch" style={{ background: TOPO_COLORS[st] }} />{topoStyleLabel(st, lang)}
                 </button>
               ))}
             </div>
             <span className="topo-sep" />
             <div className="chips">
-              {PATTERNS.map((p) => (
-                <button key={p} type="button" className="chip chip-lg" aria-pressed={current.pattern === p} onClick={() => setProp({ pattern: p })}
-                  title={t(`topo.pattern.${p}`)}>
+              {PATTERNS.map((pt) => (
+                <button key={pt} type="button" className="chip chip-lg" aria-pressed={current.pattern === pt} onClick={() => setProp({ pattern: pt })}
+                  title={t(`topo.pattern.${pt}`)}>
                   <svg width="34" height="10" aria-hidden="true">
-                    <line x1="3" y1="5" x2="31" y2="5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray={patternDash(p, 3)} />
+                    <line x1="3" y1="5" x2="31" y2="5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray={patternDash(pt, 3)} />
                   </svg>
-                  {t(`topo.pattern.${p}`)}
+                  {t(`topo.pattern.${pt}`)}
                 </button>
               ))}
               <button type="button" className="chip chip-lg" aria-pressed={current.arrowEnd} onClick={() => setProp({ arrowEnd: !current.arrowEnd })}>
@@ -269,55 +325,34 @@ export function TopoEditor({
                 {current.smooth ? '∿' : '⟋'} {t('topo.smooth')}
               </button>
             </div>
-            <span className="topo-sep" />
           </>
+        ) : (
+          <span className="topo-context-hint">{tool === 'symbol' ? t('topo.helpSymbol') : t('topo.helpEdit')}</span>
         )}
-        {selMarker && (
-          <>
-            <div className="topo-marker-props">
-              <TopoSymbolIcon id={selMarker.symbol} size={22} />
-              <span>{symbolLabel(selMarker.symbol, lang)}</span>
-              <input className="input" maxLength={50} placeholder={t('topo.markerLabel')} value={selMarker.label ?? ''}
-                onChange={(e) => setMarker({ label: e.target.value || undefined })} />
-              <button type="button" className="btn btn-sm btn-ghost" title={t('topo.rotate')}
-                onClick={() => setMarker({ rotation: ((selMarker.rotation ?? 0) + 315) % 360 })}>↺</button>
-              <button type="button" className="btn btn-sm btn-ghost" title={t('topo.rotate')}
-                onClick={() => setMarker({ rotation: ((selMarker.rotation ?? 0) + 45) % 360 })}>↻</button>
-            </div>
-            <span className="topo-sep" />
-          </>
-        )}
-        <button type="button" className="btn btn-sm btn-ghost" onClick={undo} disabled={!history.length}>↶ {t('topo.undo')}</button>
-        <button type="button" className="btn btn-sm btn-ghost" onClick={removeSelected} disabled={!sel}>
-          {selMarker ? t('topo.deleteSymbol') : t('topo.deleteLine')}
-        </button>
-        <span style={{ flexGrow: 1 }} />
-        <button type="button" className="btn btn-ghost" onClick={onClose}>{t('geo.cancel')}</button>
-        <button type="button" className="btn btn-primary" onClick={save}>{t('topo.done')}</button>
       </div>
 
       <div className="topo-body">
-        {tool === 'symbol' && (
-          <aside className="topo-palette" aria-label={t('topo.symbols')}>
-            {topoSymbolPalette(humor).map(({ group, symbols }) => (
-              <section key={group.id}>
-                <h3>{group.label[lang]}</h3>
-                <div className="topo-palette-grid">
-                  {symbols.map((s) => (
-                    <button key={s.id} type="button" aria-pressed={symbol === s.id} title={s.label[lang]} onClick={() => setSymbol(s.id)}>
-                      <TopoSymbolIcon id={s.id} size={26} />
-                      <span>{s.label[lang]}</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ))}
-            <label className="check-row topo-humor">
-              <input type="checkbox" checked={humor} onChange={(e) => setHumor(e.target.checked)} />
-              <span className="t">{t('topo.humor')}</span>
-            </label>
-          </aside>
-        )}
+        {/* Always shown: switching tools must not change the photo's width. Picking a symbol starts placing it. */}
+        <aside className="topo-palette" aria-label={t('topo.symbols')}>
+          {topoSymbolPalette(humor).map(({ group, symbols }) => (
+            <section key={group.id}>
+              <h3>{group.label[lang]}</h3>
+              <div className="topo-palette-grid">
+                {symbols.map((sy) => (
+                  <button key={sy.id} type="button" aria-pressed={tool === 'symbol' && symbol === sy.id} title={sy.label[lang]}
+                    onClick={() => { setSymbol(sy.id); pickTool('symbol'); }}>
+                    <TopoSymbolIcon id={sy.id} size={26} />
+                    <span>{sy.label[lang]}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+          <label className="check-row topo-humor">
+            <input type="checkbox" checked={humor} onChange={(e) => setHumor(e.target.checked)} />
+            <span className="t">{t('topo.humor')}</span>
+          </label>
+        </aside>
         <div className="topo-stage">
           <div className="topo-canvas" style={{ aspectRatio: `${w} / ${h}` }}>
             <img src={photo.urls?.full} alt="" draggable={false} />
@@ -331,7 +366,7 @@ export function TopoEditor({
               onPointerUp={onUp}
               onPointerCancel={onUp}
               onClick={(e) => {
-                if (justDragged.current) { justDragged.current = false; return; }
+                if (suppressClick.current) { suppressClick.current = false; return; }
                 if (tool === 'edit' && e.target === e.currentTarget) setSel(null);
               }}
             >
@@ -346,13 +381,22 @@ export function TopoEditor({
                   onClick={(e) => { e.stopPropagation(); setSel({ kind: 'path', id: p.id }); }}
                   onDoubleClick={(e) => { e.stopPropagation(); insertAnchor(e, p); }} />
               ))}
-              {tool === 'edit' && pic.markers.map((m, i) => (
-                <circle key={`m${i}`} cx={m.x * w} cy={m.y * h} r={markerSize * 0.62}
+              {(tool === 'edit' || tool === 'symbol') && pic.markers.map((m, i) => (
+                <circle key={`m${i}`} cx={m.x * w} cy={m.y * h} r={Math.max(markerSize * (m.scale ?? 1) * 0.62, 14 * scale())}
                   className={`topo-marker-hit${sel?.kind === 'marker' && sel.index === i ? ' selected' : ''}`}
                   vectorEffect="non-scaling-stroke"
                   onPointerDown={(e) => startDrag(e, { kind: 'marker', index: i }, i)}
                   onClick={(e) => e.stopPropagation()} />
               ))}
+              {selMarker && sel?.kind === 'marker' && (() => {
+                // Corner handle: drag outwards to enlarge, inwards to shrink.
+                const half = Math.max(markerSize * (selMarker.scale ?? 1) * 0.62, 14 * scale());
+                const side = 10 * scale();
+                return (
+                  <rect x={selMarker.x * w + half * 0.71 - side / 2} y={selMarker.y * h + half * 0.71 - side / 2} width={side} height={side}
+                    className="topo-resize" onPointerDown={(e) => startDrag(e, sel, sel.index, true)} onClick={(e) => e.stopPropagation()} />
+                );
+              })()}
               {stroke && stroke.length > 1 && (
                 <polyline points={stroke.map((q) => q.join(',')).join(' ')} className="topo-stroke"
                   style={{ stroke: TOPO_COLORS[defaults.style] }} vectorEffect="non-scaling-stroke" />
@@ -393,7 +437,7 @@ function fromDrawing(d: TopoDrawing | null): Picture {
   });
   const markers = (d?.markers ?? [])
     .filter((m) => typeof m.symbol === 'string')
-    .map((m) => ({ x: m.x, y: m.y, symbol: m.symbol, rotation: m.rotation ?? 0, ...(m.label ? { label: m.label } : {}) }));
+    .map((m) => ({ x: m.x, y: m.y, symbol: m.symbol, rotation: m.rotation ?? 0, scale: m.scale ?? 1, ...(m.label ? { label: m.label } : {}) }));
   return { paths, markers };
 }
 

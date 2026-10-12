@@ -205,7 +205,7 @@ class MediaTest : IntegrationTest() {
         val versions = "/photos/$photoId/topo-lines/$routeId/versions"
         fun drawing(x: Double = 0.2, pattern: String = "solid", symbol: String = "belay_good") = mapOf(
             "formatVersion" to 1,
-            "markers" to listOf(mapOf("x" to 0.5, "y" to 0.5, "symbol" to symbol, "rotation" to 90, "label" to "R1")),
+            "markers" to listOf(mapOf("x" to 0.5, "y" to 0.5, "symbol" to symbol, "rotation" to 90, "scale" to 1.5, "label" to "R1")),
             "paths" to listOf(mapOf("id" to "p1", "style" to "main", "pattern" to pattern, "arrowEnd" to (pattern == "dotted"),
                 "points" to listOf(mapOf("x" to x, "y" to 0.9), mapOf("x" to 0.5, "y" to 0.5), mapOf("x" to 0.6, "y" to 0.1)))),
             "labels" to listOf(mapOf("x" to 0.5, "y" to 0.5, "text" to "Ключ (тест)", "pathId" to "p1")),
@@ -230,6 +230,7 @@ class MediaTest : IntegrationTest() {
         assertTrue(v1["drawing"]["paths"][0]["arrowEnd"].asBoolean())
         assertEquals("belay_good", v1["drawing"]["markers"][0]["symbol"].asText())
         assertEquals(90.0, v1["drawing"]["markers"][0]["rotation"].asDouble())
+        assertEquals(1.5, v1["drawing"]["markers"][0]["scale"].asDouble())
         assertTrue(v1["drawing"]["paths"][0]["smooth"].asBoolean())
 
         // A second first version is a conflict: the base is now v1.

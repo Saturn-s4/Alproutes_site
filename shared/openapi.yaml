@@ -2470,7 +2470,8 @@ components:
       type: object
       description: |
         Условный знак на фото — центр символа в точке (x, y). Размер знака — 5 % меньшей стороны
-        изображения, подпись — справа от знака; так рисунок одинаков на всех клиентах.
+        изображения, умноженные на `scale`; подпись — справа от знака, того же масштаба.
+        Так рисунок одинаков на всех клиентах.
       required: [x, y, symbol]
       properties:
         x: { type: number, format: double, minimum: 0, maximum: 1 }
@@ -2488,6 +2489,12 @@ components:
           exclusiveMaximum: 360
           default: 0
           description: Поворот символа по часовой стрелке, градусы (для направленных — дюльфер, маятник)
+        scale:
+          type: number
+          minimum: 0.25
+          maximum: 4
+          default: 1
+          description: Масштаб знака относительно стандартного размера
         label: { type: string, maxLength: 50, example: R3, description: Короткая подпись рядом со знаком }
     TopoLabel:
       type: object

@@ -47,12 +47,13 @@ export function TopoOverlay({
       {drawing.markers?.map((m, i) => {
         const x = m.x * width;
         const y = m.y * height;
+        const size = markerSize * (m.scale ?? 1);
         return (
           <g key={`m${i}`} transform={m.rotation ? `rotate(${m.rotation} ${x} ${y})` : undefined}>
-            <TopoSymbolGlyph id={m.symbol} x={x} y={y} size={markerSize} />
+            <TopoSymbolGlyph id={m.symbol} x={x} y={y} size={size} />
             {m.label && (
               // The label stays upright whatever the symbol's rotation.
-              <text className="topo-label" x={x + markerSize * 0.62} y={y} fontSize={markerSize * 0.62}
+              <text className="topo-label" x={x + size * 0.62} y={y} fontSize={size * 0.62}
                 transform={m.rotation ? `rotate(${-m.rotation} ${x} ${y})` : undefined}>{m.label}</text>
             )}
           </g>

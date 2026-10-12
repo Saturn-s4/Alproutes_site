@@ -51,7 +51,9 @@ data class TopoPath(
     val points: List<TopoPoint>,
 )
 
-data class TopoMarker(val x: Double, val y: Double, val symbol: String, val rotation: Double = 0.0, val label: String? = null)
+data class TopoMarker(
+    val x: Double, val y: Double, val symbol: String, val rotation: Double = 0.0, val scale: Double = 1.0, val label: String? = null,
+)
 
 data class TopoLabel(val x: Double, val y: Double, val text: String, val pathId: String? = null)
 
@@ -89,6 +91,7 @@ internal fun validateDrawing(d: TopoDrawing) = validate {
         point(m.x, m.y, "drawing.markers[$i]")
         check(SYMBOL_ID.matches(m.symbol), "drawing.markers[$i].symbol", "Id символа из общего набора")
         check(m.rotation.isFinite() && m.rotation >= 0.0 && m.rotation < 360.0, "drawing.markers[$i].rotation", "От 0 до 360 градусов")
+        check(m.scale.isFinite() && m.scale in 0.25..4.0, "drawing.markers[$i].scale", "От 0.25 до 4")
         m.label?.let { check(it.length <= 50, "drawing.markers[$i].label", "До 50 символов") }
     }
     check(d.labels.size <= 200, "drawing.labels", "Не больше 200 подписей")
