@@ -67,7 +67,6 @@ export default async function RoutePage({ params }: Props) {
 
       <div className="route-cols">
         <div className="route-main">
-          <Disclaimer t={t} />
           <section className="prose">
             <h2 className="h2">{t('route.description')}</h2>
             {description ? (
@@ -105,6 +104,9 @@ export default async function RoutePage({ params }: Props) {
             <h2 className="h2">{t('cm.title')} · <span className="mono">{route.stats?.commentCount ?? comments.data.items.filter((c) => !c.isDeleted).length}</span></h2>
             <Comments routeId={route.id} initial={comments.data.items} nextCursor={comments.data.nextCursor ?? null} />
           </section>
+
+          {/* Required on every route page (CLAUDE.md, section 8); placed after all route content. */}
+          <Disclaimer t={t} />
         </div>
 
         <aside className="route-aside">
