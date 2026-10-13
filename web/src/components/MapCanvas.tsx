@@ -36,6 +36,7 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
   useEffect(() => {
     let cancelled = false;
     let map: MlMap | null = null;
+    let observer: ResizeObserver | null = null;
     void import('maplibre-gl')
       .then((ml) => {
         if (cancelled || !ref.current) return;
@@ -50,7 +51,12 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
           fadeDuration: 0,
         });
         map = m;
-        m.on('load', () => {
+        // MapLibre follows window resizes only; layout changes (e.g. the route card column) resize the container.
+        observer = new ResizeObserver(() => m.resize());
+        observer.observe(ref.current);
+        // 'style.load', not 'load': 'load' waits for every visible tile, and route layers
+        // and the list request should not wait for a slow tile server.
+        m.once('style.load', () => {
           if (cancelled) return;
           mapRef.current = m;
           setLoaded(true);
@@ -64,6 +70,7 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
       cancelled = true;
       mapRef.current = null;
       repaintRef.current = null;
+      observer?.disconnect();
       map?.remove();
     };
     // The map is created once; center/zoom are initial values only.

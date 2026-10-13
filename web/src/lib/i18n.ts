@@ -31,7 +31,7 @@ const ru = {
 
   'map.inView': 'В этой области',
   'map.empty': 'В этой области нет маршрутов с геометрией. Сдвиньте карту или откройте каталог.',
-  'map.pickRoute': 'Выберите маршрут на карте или в списке.',
+  'map.closeRoute': 'Закрыть карточку маршрута',
   'map.zoomIn': 'Приблизить',
   'map.zoomOut': 'Отдалить',
   'map.truncated': 'Показаны не все маршруты — приблизьте карту',
@@ -440,7 +440,7 @@ const en: Record<MessageKey, string> = {
 
   'map.inView': 'In this area',
   'map.empty': 'No routes with geometry here. Move the map or open the catalogue.',
-  'map.pickRoute': 'Pick a route on the map or in the list.',
+  'map.closeRoute': 'Close route card',
   'map.zoomIn': 'Zoom in',
   'map.zoomOut': 'Zoom out',
   'map.truncated': 'Not all routes are shown — zoom in',
