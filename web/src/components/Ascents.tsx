@@ -78,9 +78,11 @@ export function Ascents({ routeId, initial, nextCursor }: { routeId: string; ini
           + {t('asc.add')}
         </button>
       )}
-      {session === null && <p className="muted"><a href="/login">{t('header.signIn')}</a> — {t('asc.signIn')}</p>}
+      {session === null && (
+        <p className="muted">{items.length === 0 && `${t('asc.none')} `}<a href="/login">{t('header.signIn')}</a> — {t('asc.signIn')}</p>
+      )}
       {editing === 'new' && <AscentForm routeId={routeId} onSaved={saved} onCancel={() => setEditing(null)} />}
-      {items.length === 0 && editing !== 'new' && <p className="muted">{t('asc.none')}</p>}
+      {items.length === 0 && editing !== 'new' && session !== null && <p className="muted">{t('asc.none')}</p>}
       {items.map((a) => (editing !== 'new' && editing?.id === a.id ? (
         <AscentForm key={a.id} routeId={routeId} ascent={a} onSaved={saved} onCancel={() => setEditing(null)} />
       ) : (

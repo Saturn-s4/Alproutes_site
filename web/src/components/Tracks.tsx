@@ -24,7 +24,7 @@ export function Tracks({ routeId, initial }: { routeId: string; initial: Track[]
 
   return (
     <div className="tracks">
-      {tracks.length === 0 && <p className="muted">{t('trk.none')}</p>}
+      {tracks.length === 0 && session && <p className="muted">{t('trk.none')}</p>}
       {tracks.map((tr) => (
         <div key={tr.id} className={`track-row${tr.id === selected ? ' current' : ''}`}>
           <button type="button" className="track-main" onClick={() => setSelected(tr.id)} aria-pressed={tr.id === selected}>
@@ -63,7 +63,7 @@ export function Tracks({ routeId, initial }: { routeId: string; initial: Track[]
       {current?.processingStatus === 'failed' && <p className="error-text">{current.processingError ?? t('trk.failed')}</p>}
 
       {session ? <TrackUpload routeId={routeId} onAdded={(tr) => { setTracks((x) => [tr, ...x.filter((y) => y.id !== tr.id)]); setSelected(tr.id); }} /> : (
-        <p className="muted"><a href="/login">{t('header.signIn')}</a> — {t('trk.signInToUpload')}</p>
+        <p className="muted">{tracks.length === 0 && `${t('trk.none')} `}<a href="/login">{t('header.signIn')}</a> — {t('trk.signInToUpload')}</p>
       )}
     </div>
   );

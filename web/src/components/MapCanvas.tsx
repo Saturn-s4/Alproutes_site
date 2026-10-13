@@ -3,7 +3,7 @@
 import type { Map as MlMap } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { baseStyle, rasterPaint } from '@/lib/map-style';
-import { useResolvedTheme } from './Prefs';
+import { usePrefs, useResolvedTheme } from './Prefs';
 
 /** Copied to /public by `npm run prepare:assets` (see scripts/copy-maplibre-worker.mjs). */
 const WORKER_URL = '/maplibre/maplibre-gl-worker.mjs';
@@ -30,6 +30,8 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
   onReadyRef.current = onReady;
   const repaintRef = useRef<(() => void) | null>(null);
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const { t } = usePrefs();
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +53,7 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
         m.on('load', () => {
           if (cancelled) return;
           mapRef.current = m;
+          setLoaded(true);
           repaintRef.current = onReadyRef.current(m) ?? null;
           // The theme may have changed while the map was loading.
           applyTheme(m, themeRef.current, repaintRef.current);
@@ -73,7 +76,12 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
   }, [theme]);
 
   if (failed) return <div className={className}><p className="empty">WebGL map failed to load.</p></div>;
-  return <div ref={ref} className={className ?? 'map-canvas'} />;
+  return (
+    <>
+      <div ref={ref} className={className ?? 'map-canvas'} />
+      {!loaded && <p className="map-pending">{t('common.loading')}</p>}
+    </>
+  );
 }
 
 function applyTheme(map: MlMap, theme: 'dark' | 'light', repaint: (() => void) | null) {

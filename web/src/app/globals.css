@@ -161,6 +161,7 @@ h1, h2, h3 { margin: 0; }
 p { margin: 0; }
 
 .mono { font-family: var(--font-mono); }
+.pre-wrap { white-space: pre-wrap; }
 .muted { color: var(--muted); }
 .display { font-family: var(--font-display); }
 .sr-only {
@@ -358,7 +359,8 @@ p { margin: 0; }
 /* ---------- Route page ---------- */
 
 .route-head { display: flex; align-items: flex-end; gap: 2rem; flex-wrap: wrap; }
-.route-head .titles { flex-grow: 1; }
+.route-head .titles { flex-grow: 1; display: flex; flex-direction: column; gap: 1.2rem; }
+.route-meta { font-size: 1.3rem; color: var(--muted); }
 
 .route-cols { display: flex; gap: 2.4rem; align-items: flex-start; }
 .route-main { flex-grow: 1; display: flex; flex-direction: column; gap: 2.4rem; min-width: 0; }
@@ -369,6 +371,12 @@ p { margin: 0; }
 .prose h2 { color: var(--text); }
 
 .route-map { height: 38rem; border-radius: 1.2rem; position: relative; overflow: hidden; background: var(--map); border: 1px solid var(--line); }
+/* Route page: the map and its legend share one frame. */
+.route-geo { border-radius: 1.2rem; overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
+.route-geo .route-map { border: 0; border-radius: 0; }
+.route-geo .feature-list { padding: 1.2rem 1.6rem; border-top: 1px solid var(--line); }
+.facts-missing { font-size: 1.3rem; color: var(--faint); }
+.facts-missing::first-letter { text-transform: uppercase; }
 
 .box { padding: 1.6rem; border-radius: 1.2rem; background: var(--surface); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 1.2rem; }
 .plain-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; }
@@ -465,6 +473,7 @@ p { margin: 0; }
 /* ---------- /web additions (MapLibre, contract-specific UI) ---------- */
 
 .map-canvas { position: absolute; inset: 0; }
+.map-pending { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.4rem; pointer-events: none; }
 .maplibregl-ctrl-attrib { font-size: 1rem; background: var(--overlay) !important; color: var(--muted); }
 .maplibregl-ctrl-attrib a { color: var(--blue-text); }
 .maplibregl-ctrl-attrib-button { filter: var(--attrib-icon-filter, none); }
@@ -523,7 +532,7 @@ a.route-row:hover { color: var(--text); }
 .feature-list li { display: flex; gap: 1rem; align-items: baseline; }
 .feature-list .swatch { width: 1.4rem; height: 0.4rem; border-radius: 0.2rem; flex-shrink: 0; transform: translateY(-0.2rem); }
 .feature-list .swatch.pt { width: 1rem; height: 1rem; border-radius: 50%; transform: none; }
-.feature-list ul { list-style: none; margin: 0; padding: 0; }
+.feature-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
 
 .theme-select {
   height: 3.6rem; padding: 0 1rem; border-radius: 0.8rem; border: 1px solid var(--line2); background: transparent;
