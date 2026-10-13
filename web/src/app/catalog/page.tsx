@@ -53,6 +53,21 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
   // Systems worth offering: RU always, others only if some route uses them.
   const usedSystems = systems.data.items.filter((s) => s.code === 'RU' || s.code === system || f.grades.some((g) => g.system === s.code));
   const area = f.areas.find((a) => a.area.id === sp.area)?.area;
+  const gradeCount = (value: string) => (sys ? counts.get(`${sys.code}:${value}`) ?? 0 : 0);
+  const shownGrades = sys?.values.filter((v) => gradeCount(v.value) > 0 || values.includes(v.value)) ?? [];
+  const emptyGrades = sys?.values.filter((v) => !shownGrades.includes(v)) ?? [];
+  const gradeLink = (value: string) => {
+    const on = values.includes(value);
+    const next = on ? values.filter((x) => x !== value) : [...values, value];
+    return (
+      <Link key={value} className="check" role="checkbox" aria-checked={on} rel="nofollow"
+        href={hrefWith(sp, { g: next.length ? next.join(',') : null })}>
+        <span className="cbox" aria-hidden="true" />
+        <span className="mono">{value}</span>
+        <span className="n">{gradeCount(value)}</span>
+      </Link>
+    );
+  };
   const sortLabel: Record<Sort, string> = {
     name: t('catalog.sort.name'),
     grade: `${t('catalog.sort.grade')} (${system})`,
@@ -73,19 +88,14 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
               </Link>
             ))}
           </div>
-          {sys?.values.map((v) => {
-            const on = values.includes(v.value);
-            const n = counts.get(`${sys.code}:${v.value}`) ?? 0;
-            const next = on ? values.filter((x) => x !== v.value) : [...values, v.value];
-            return (
-              <Link key={v.value} className="check" role="checkbox" aria-checked={on} rel="nofollow"
-                href={hrefWith(sp, { g: next.length ? next.join(',') : null })}>
-                <span className="cbox" aria-hidden="true" />
-                <span className="mono">{v.value}</span>
-                <span className="n">{n}</span>
-              </Link>
-            );
-          })}
+          {shownGrades.map((v) => gradeLink(v.value))}
+          {/* Grades no route has are folded away; <details> keeps this working without JS. */}
+          {emptyGrades.length > 0 && (
+            <details className="more-grades">
+              <summary>{t('catalog.moreGrades').replace('{n}', String(emptyGrades.length))}</summary>
+              {emptyGrades.map((v) => gradeLink(v.value))}
+            </details>
+          )}
           {values.length > 0 && <p className="filter-note">{t('catalog.gradeNote').replace('{system}', system)}</p>}
         </fieldset>
 
@@ -126,11 +136,11 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
       <main className="catalog-main">
         <div className="catalog-top">
           <div>
-            <h1 className="h1" style={{ fontSize: 'clamp(2.8rem, 3vw, 4rem)' }}>
+            <h1 className="h1">
               {area ? locText(area.name, lang) : t('catalog.routesTitle')}
             </h1>
-            <div className="muted" style={{ marginTop: '1rem' }}>
-              <span className="mono" style={{ color: 'var(--accent)' }}>{formatInt(f.total, lang)}</span>{' '}
+            <div className="catalog-count">
+              <span className="mono">{formatInt(f.total, lang)}</span>{' '}
               {routeWord(f.total, lang)}
             </div>
           </div>
@@ -153,7 +163,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: Prom
           ))}
         </div>
         {(sp.cursor || routes.data.nextCursor) && (
-          <div className="row-gap" style={{ gap: '1.2rem' }}>
+          <div className="pager">
             {sp.cursor && <Link className="btn btn-ghost" href={hrefWith(sp, {})}>{t('catalog.firstPage')}</Link>}
             {routes.data.nextCursor && (
               <Link className="btn btn-ghost" href={`${hrefWith(sp, {})}${hrefWith(sp, {}).includes('?') ? '&' : '?'}cursor=${encodeURIComponent(routes.data.nextCursor)}`}>
