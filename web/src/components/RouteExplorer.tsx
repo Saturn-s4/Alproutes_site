@@ -196,17 +196,18 @@ export function RouteExplorer() {
   };
 
   return (
-    <div className="map-layout">
+    <div className={`map-layout${selectedSlug ? '' : ' no-panel'}`}>
       <aside className="route-list" aria-label={t('map.inView')}>
         <div className="route-list-head">
           <div className="title">
             <span>{t('map.inView')}</span>
-            <span className="mono muted" style={{ fontSize: '1.2rem' }}>
+            <span className="mono muted">
               {list ? `${list.items.length}${list.next ? '+' : ''}` : ''}
             </span>
           </div>
         </div>
         <div className="route-list-items">
+          {!list && !error && <p className="empty">{t('common.loading')}</p>}
           {error && (
             <p className="empty">
               {t('common.error')}{' '}
@@ -220,7 +221,7 @@ export function RouteExplorer() {
             <RouteRow key={r.id} route={r} current={r.slug === selectedSlug} onClick={() => flyTo(r)} />
           ))}
           {list?.next && (
-            <div style={{ padding: '1.2rem 1.6rem' }}>
+            <div className="route-list-more">
               <button type="button" className="btn btn-ghost btn-block" onClick={() => void loadMore()}>{t('common.more')}</button>
             </div>
           )}
@@ -237,9 +238,13 @@ export function RouteExplorer() {
         {loading && <div className="map-overlay map-loading">{t('common.loading')}</div>}
       </main>
 
-      <aside className="panel" aria-label={detail ? locText(detail.name, lang) : undefined}>
-        {detail ? <RoutePanel route={detail} /> : <p className="empty">{t('map.pickRoute')}</p>}
-      </aside>
+      {/* The card column exists only while a route is selected: the map gets the width otherwise. */}
+      {selectedSlug && (
+        <aside className="panel" aria-label={detail ? locText(detail.name, lang) : undefined}>
+          <button type="button" className="panel-close" aria-label={t('map.closeRoute')} onClick={() => select(null)}>×</button>
+          {detail ? <RoutePanel route={detail} /> : <p className="empty">{t('common.loading')}</p>}
+        </aside>
+      )}
     </div>
   );
 }
@@ -250,13 +255,12 @@ function RouteRow({ route, current, onClick }: { route: RouteSummary; current: b
   return (
     <button type="button" className="route-row" aria-current={current} onClick={onClick}>
       <span className="badge badge-text" title={grade ? `${grade.system} ${grade.value}` : t('route.noGrade')}>
-        {grade ? grade.value : '?'}
+        {grade ? <><small>{grade.system}</small>{grade.value}</> : '?'}
       </span>
       <span className="body">
         <span className="peak"><LText text={route.name} lang={lang} t={t} /></span>
         <span className="name"><LText text={route.area.name} lang={lang} t={t} /></span>
         <span className="meta">
-          {grade && <span>{grade.system}</span>}
           {route.elevationGainM != null && <span>↑ {formatInt(route.elevationGainM, lang)} {t('common.m')}</span>}
           {route.lengthM != null && <span>{formatInt(route.lengthM, lang)} {t('common.m')}</span>}
         </span>
@@ -274,14 +278,14 @@ function RoutePanel({ route }: { route: RouteDetail }) {
     <>
     {cover && <img className="panel-cover" src={cover.medium} alt="" />}
     <div className="panel-body">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-        <span className="muted" style={{ fontSize: '1.3rem' }}>
+      <div className="panel-title">
+        <span className="muted">
           {route.areaPath.map((a) => locText(a.name, lang)).join(' · ')}
         </span>
         <h1><LText text={route.name} lang={lang} t={t} /></h1>
         <Grades grades={route.grades} emptyLabel={t('route.noGrade')} />
       </div>
-      <div className="stats" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+      <div className="stats">
         <div>
           <div className="k">{t('route.gain')}</div>
           <div className="v">{route.elevationGainM != null ? `${formatInt(route.elevationGainM, lang)} ${t('common.m')}` : <NoData t={t} />}</div>
@@ -292,17 +296,17 @@ function RoutePanel({ route }: { route: RouteDetail }) {
         </div>
         <div>
           <div className="k">{t('route.type')}</div>
-          <div className="v" style={{ fontSize: '1.3rem' }}>{route.routeType ? routeTypeLabel(route.routeType, lang) : <NoData t={t} />}</div>
+          <div className="v text">{route.routeType ? routeTypeLabel(route.routeType, lang) : <NoData t={t} />}</div>
         </div>
         <div>
           <div className="k">{t('route.season')}</div>
-          <div className="v" style={{ fontSize: '1.3rem' }}>
+          <div className="v text">
             {route.seasonMonths?.length ? route.seasonMonths.map((m) => monthName(m, lang)).join(', ') : <NoData t={t} />}
           </div>
         </div>
       </div>
-      {excerpt ? <p className="desc" style={{ whiteSpace: 'pre-wrap' }}>{excerpt}</p> : <p className="muted">{t('route.noDescription')}</p>}
-      <Disclaimer t={t} />
+      {excerpt ? <p className="desc pre-wrap">{excerpt}</p> : <p className="muted">{t('route.noDescription')}</p>}
+      <Disclaimer t={t} compact />
       <Link href={`/routes/${route.slug}`} className="btn btn-primary">{t('route.open')}</Link>
     </div>
     </>

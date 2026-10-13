@@ -138,7 +138,7 @@ export function GradesEditor({ value, onChange, errors }: { value: Grade[]; onCh
         );
       })}
       {free.length > 0 && (
-        <select className="theme-select" value="" onChange={(e) => {
+        <select className="select-sm" value="" onChange={(e) => {
           // No preselected value: a grade nobody chose must not slip into the catalogue.
           const s = systems.find((x) => x.code === e.target.value);
           if (s) onChange([...value, { system: s.code, value: '' }]);

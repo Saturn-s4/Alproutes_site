@@ -64,7 +64,7 @@ export function UserPhotos({ routeId, initial, nextCursor }: { routeId: string; 
 
   return (
     <>
-      {ready.length === 0 && unready.length === 0 && <p className="muted">{t('route.noUserPhotos')}</p>}
+      {ready.length === 0 && unready.length === 0 && <p className="muted">{t('route.noUserPhotos')} {t('ph.viaComments')}</p>}
       {(ready.length > 0 || unready.length > 0) && (
         <div className="user-photos">
           {unready.map((photo) => (
@@ -105,7 +105,7 @@ export function UserPhotos({ routeId, initial, nextCursor }: { routeId: string; 
           {t('common.more')}
         </button>
       )}
-      <p className="field-hint">{t('ph.viaComments')}</p>
+      {(ready.length > 0 || unready.length > 0) && <p className="field-hint">{t('ph.viaComments')}</p>}
       <Lightbox items={ready} index={open} onIndex={setOpen} routeId={routeId} />
     </>
   );

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Ascents } from '@/components/Ascents';
 import { Comments } from '@/components/Comments';
 import { Crumbs } from '@/components/Crumbs';
@@ -56,9 +56,12 @@ export default async function RoutePage({ params }: Props) {
       <Crumbs path={route.areaPath} current={locText(route.name, lang)} lang={lang} t={t} />
 
       <div className="route-head">
-        <div className="titles" style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+        <div className="titles">
           <h1 className="h1"><LText text={route.name} lang={lang} t={t} /></h1>
           <Grades grades={route.grades} emptyLabel={t('route.noGrade')} />
+          <p className="route-meta">
+            {t('route.revision')} #{route.currentRevision.revisionNumber} · {t('route.updated')} {formatDate(route.updatedAt, lang)}
+          </p>
         </div>
         <RouteEditLinks routeId={route.id} slug={route.slug} />
       </div>
@@ -70,7 +73,7 @@ export default async function RoutePage({ params }: Props) {
           <section className="prose">
             <h2 className="h2">{t('route.description')}</h2>
             {description ? (
-              <p style={{ whiteSpace: 'pre-wrap' }}>
+              <p className="pre-wrap">
                 {description.text}
                 {description.fallback && <span className="fallback-note">[{description.lang}]</span>}
               </p>
@@ -110,67 +113,60 @@ export default async function RoutePage({ params }: Props) {
         </div>
 
         <aside className="route-aside">
-          <div className="route-map">
-            {route.features?.length || trackIds.length ? (
-              <RouteFeaturesMap features={route.features ?? []} trackIds={trackIds} />
-            ) : (
-              <p className="empty">{t('route.noGeometry')}</p>
-            )}
-          </div>
-          {route.features && route.features.length > 0 && <FeatureLegend route={route} lang={lang} />}
+          {route.features?.length || trackIds.length ? (
+            <div className="route-geo">
+              <div className="route-map">
+                <RouteFeaturesMap features={route.features ?? []} trackIds={trackIds} />
+              </div>
+              {route.features && route.features.length > 0 && <FeatureLegend route={route} lang={lang} />}
+            </div>
+          ) : (
+            <p className="muted">{t('route.noGeometry')}</p>
+          )}
           <div className="box">
             <Facts route={route} lang={lang} t={t} />
           </div>
-          <div className="box">
-            <span className="eyebrow">{t('route.stats')}</span>
-            <dl className="facts">
-              {(
-                [
-                  ['route.photos', route.stats?.photoCount],
-                  ['route.tracks', route.stats?.trackCount],
-                  ['route.ascents', route.stats?.ascentCount],
-                  ['route.comments', route.stats?.commentCount],
-                  ['route.documents', route.stats?.documentCount],
-                ] as const
-              ).map(([k, v]) => (
-                <Fact key={k} label={t(k)}>{formatInt(v ?? 0, lang)}</Fact>
-              ))}
-            </dl>
-          </div>
-          <p className="muted" style={{ fontSize: '1.2rem' }}>
-            {t('route.revision')} #{route.currentRevision.revisionNumber} · {t('route.updated')} {formatDate(route.updatedAt, lang)}
-          </p>
         </aside>
       </div>
     </div>
   );
 }
 
-function Fact({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
+type FactRow = { label: string; value: ReactNode; mono?: boolean };
+
+/** Known facts as a list; missing ones are named in a single "no data" line rather than a row each. */
+function Facts({ route, lang, t }: { route: RouteDetail; lang: Lang; t: Translate }) {
+  const m = (v: number | null | undefined) => (v != null ? `${formatInt(v, lang)} ${t('common.m')}` : null);
+  const rows: FactRow[] = [
+    { label: t('route.type'), value: route.routeType ? routeTypeLabel(route.routeType, lang) : null },
+    { label: t('route.traverse'), value: route.isTraverse == null ? null : t(route.isTraverse ? 'route.yes' : 'route.no') },
+    { label: t('route.gain'), value: m(route.elevationGainM), mono: true },
+    { label: t('route.length'), value: m(route.lengthM), mono: true },
+    { label: t('route.season'), value: route.seasonMonths?.length ? route.seasonMonths.map((mm) => monthName(mm, lang)).join(', ') : null },
+    { label: t('route.firstAscent'), value: route.firstAscentParty ?? null },
+    { label: t('route.firstAscentYear'), value: route.firstAscentYear ?? null, mono: true },
+    { label: t('route.sources'), value: route.dataSources ? <span className="pre-wrap">{route.dataSources}</span> : null },
+  ];
+  const known = rows.filter((r) => r.value != null);
+  const missing = rows.filter((r) => r.value == null);
   return (
     <>
-      <dt>{label}</dt>
-      <dd className={mono ? 'mono' : undefined}>{children}</dd>
+      {known.length > 0 && (
+        <dl className="facts">
+          {known.map((r) => (
+            <Fragment key={r.label}>
+              <dt>{r.label}</dt>
+              <dd className={r.mono ? 'mono' : undefined}>{r.value}</dd>
+            </Fragment>
+          ))}
+        </dl>
+      )}
+      {missing.length > 0 && (
+        <p className="facts-missing">
+          <NoData t={t} />: {missing.map((r) => r.label.toLocaleLowerCase(lang)).join(', ')}
+        </p>
+      )}
     </>
-  );
-}
-
-function Facts({ route, lang, t }: { route: RouteDetail; lang: Lang; t: Translate }) {
-  const nd = <NoData t={t} />;
-  const m = (v: number | null | undefined) => (v != null ? `${formatInt(v, lang)} ${t('common.m')}` : nd);
-  return (
-    <dl className="facts">
-      <Fact label={t('route.type')}>{route.routeType ? routeTypeLabel(route.routeType, lang) : nd}</Fact>
-      <Fact label={t('route.traverse')}>{route.isTraverse == null ? nd : t(route.isTraverse ? 'route.yes' : 'route.no')}</Fact>
-      <Fact label={t('route.gain')} mono>{m(route.elevationGainM)}</Fact>
-      <Fact label={t('route.length')} mono>{m(route.lengthM)}</Fact>
-      <Fact label={t('route.season')}>
-        {route.seasonMonths?.length ? route.seasonMonths.map((mm) => monthName(mm, lang)).join(', ') : nd}
-      </Fact>
-      <Fact label={t('route.firstAscent')}>{route.firstAscentParty ?? nd}</Fact>
-      <Fact label={t('route.firstAscentYear')} mono>{route.firstAscentYear ?? nd}</Fact>
-      <Fact label={t('route.sources')}>{route.dataSources ? <span style={{ whiteSpace: 'pre-wrap' }}>{route.dataSources}</span> : nd}</Fact>
-    </dl>
   );
 }
 
@@ -179,8 +175,8 @@ const ROLE_VAR = { accent: 'var(--accent)', blue: 'var(--blue-text)', muted: 'va
 function FeatureLegend({ route, lang }: { route: RouteDetail; lang: Lang }) {
   const t = translator(lang);
   return (
-    <div className="box feature-list">
-      <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+    <div className="feature-list">
+      <ul>
         {route.features?.map((f, i) => (
           <li key={i}>
             <span className={`swatch${f.point ? ' pt' : ''}`} style={{ background: ROLE_VAR[FEATURE_ROLE[f.kind]] }} />

@@ -3,7 +3,7 @@
 import type { Map as MlMap } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 import { baseStyle, rasterPaint } from '@/lib/map-style';
-import { useResolvedTheme } from './Prefs';
+import { usePrefs, useResolvedTheme } from './Prefs';
 
 /** Copied to /public by `npm run prepare:assets` (see scripts/copy-maplibre-worker.mjs). */
 const WORKER_URL = '/maplibre/maplibre-gl-worker.mjs';
@@ -30,10 +30,13 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
   onReadyRef.current = onReady;
   const repaintRef = useRef<(() => void) | null>(null);
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const { t } = usePrefs();
 
   useEffect(() => {
     let cancelled = false;
     let map: MlMap | null = null;
+    let observer: ResizeObserver | null = null;
     void import('maplibre-gl')
       .then((ml) => {
         if (cancelled || !ref.current) return;
@@ -48,9 +51,15 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
           fadeDuration: 0,
         });
         map = m;
-        m.on('load', () => {
+        // MapLibre follows window resizes only; layout changes (e.g. the route card column) resize the container.
+        observer = new ResizeObserver(() => m.resize());
+        observer.observe(ref.current);
+        // 'style.load', not 'load': 'load' waits for every visible tile, and route layers
+        // and the list request should not wait for a slow tile server.
+        m.once('style.load', () => {
           if (cancelled) return;
           mapRef.current = m;
+          setLoaded(true);
           repaintRef.current = onReadyRef.current(m) ?? null;
           // The theme may have changed while the map was loading.
           applyTheme(m, themeRef.current, repaintRef.current);
@@ -61,6 +70,7 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
       cancelled = true;
       mapRef.current = null;
       repaintRef.current = null;
+      observer?.disconnect();
       map?.remove();
     };
     // The map is created once; center/zoom are initial values only.
@@ -73,7 +83,12 @@ export function MapCanvas({ center, zoom, onReady, className }: Props) {
   }, [theme]);
 
   if (failed) return <div className={className}><p className="empty">WebGL map failed to load.</p></div>;
-  return <div ref={ref} className={className ?? 'map-canvas'} />;
+  return (
+    <>
+      <div ref={ref} className={className ?? 'map-canvas'} />
+      {!loaded && <p className="map-pending">{t('common.loading')}</p>}
+    </>
+  );
 }
 
 function applyTheme(map: MlMap, theme: 'dark' | 'light', repaint: (() => void) | null) {
