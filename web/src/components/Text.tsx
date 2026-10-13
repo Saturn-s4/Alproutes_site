@@ -19,9 +19,9 @@ export function NoData({ t }: { t: Translate }) {
   return <span className="nodata">{t('common.noData')}</span>;
 }
 
-export function Disclaimer({ t, compact }: { t: Translate; compact?: boolean }) {
+export function Disclaimer({ t }: { t: Translate }) {
   return (
-    <aside className={`disclaimer${compact ? ' compact' : ''}`} role="note">
+    <aside className="disclaimer" role="note">
       <b>{t('disclaimer.title')}</b>
       <span>{t('disclaimer.text')}</span>
     </aside>

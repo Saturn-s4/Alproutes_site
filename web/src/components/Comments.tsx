@@ -69,7 +69,7 @@ export function Comments({ routeId, initial, nextCursor }: { routeId: string; in
 
   return (
     <div className="comments">
-      {items.length === 0 && session !== null && <p className="muted">{t('cm.none')}</p>}
+      {items.length === 0 && <p className="muted">{t('cm.none')}</p>}
       {[...top, ...orphans].map((c) => (
         <div key={c.id} className="comment-thread">
           <CommentItem comment={c} me={me} isModerator={isModerator} onChanged={changed}
@@ -89,7 +89,7 @@ export function Comments({ routeId, initial, nextCursor }: { routeId: string; in
       {session ? (
         <Composer routeId={routeId} onPosted={(x) => changed(x, x.photos.length > 0)} />
       ) : session === null && (
-        <p className="muted">{items.length === 0 && `${t('cm.none')} `}<a href="/login">{t('header.signIn')}</a> — {t('cm.signIn')}</p>
+        <p className="muted"><a href="/login">{t('header.signIn')}</a> — {t('cm.signIn')}</p>
       )}
     </div>
   );

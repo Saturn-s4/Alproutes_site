@@ -34,10 +34,11 @@ export function RouteCard({
             '?'
           )}
         </span>
+        {!route.coverPhotoUrl && <span>{t('catalog.noPhoto')}</span>}
       </div>
       <div className="info">
         <div className="peak">{locText(route.name, lang)}</div>
-        <div className="area">{locText(route.area.name, lang)}</div>
+        <div className="muted" style={{ fontSize: '1.3rem' }}>{locText(route.area.name, lang)}</div>
         <div className="meta">
           <span>
             ↑ {route.elevationGainM != null ? `${formatInt(route.elevationGainM, lang)} ${t('common.m')}` : <span className="nodata">{t('common.noData')}</span>}

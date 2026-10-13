@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef } from 'react';
 import { logout } from '@/lib/api/browser';
-import { LANGS, THEMES } from '@/lib/prefs';
+import { LANGS, THEMES, type ThemePref } from '@/lib/prefs';
 import { usePrefs } from './Prefs';
 
 function initials(name: string) {
@@ -22,22 +21,6 @@ export function Header() {
   const { t, lang, setLang, theme, setTheme, session } = usePrefs();
   const pathname = usePathname();
   const navClass = (active: boolean) => (active ? 'active' : undefined);
-  const menuRef = useRef<HTMLDetailsElement>(null);
-
-  // A native <details> does not close by itself: close it on an outside click or Escape.
-  useEffect(() => {
-    const close = (e: Event) => {
-      const menu = menuRef.current;
-      if (!menu?.open) return;
-      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !menu.contains(e.target as Node)) menu.open = false;
-    };
-    document.addEventListener('pointerdown', close);
-    document.addEventListener('keydown', close);
-    return () => {
-      document.removeEventListener('pointerdown', close);
-      document.removeEventListener('keydown', close);
-    };
-  }, []);
 
   return (
     <header className="header">
@@ -53,30 +36,23 @@ export function Header() {
         )}
       </nav>
       <div className="spacer" />
-      <details className="prefs-menu" ref={menuRef}>
-        <summary className="prefs-toggle" aria-label={t('header.settings')} title={t('header.settings')}>
-          <span className="mono">{lang.toUpperCase()}</span>
-          <ThemeIcon />
-        </summary>
-        <div className="prefs-pop">
-          <span className="prefs-label">{t('header.lang')}</span>
-          <div className="segmented" role="group" aria-label={t('header.lang')}>
-            {LANGS.map((l) => (
-              <button key={l} type="button" aria-pressed={lang === l} onClick={() => setLang(l)}>
-                {l.toUpperCase()}
-              </button>
-            ))}
-          </div>
-          <span className="prefs-label">{t('header.theme')}</span>
-          <div className="segmented" role="group" aria-label={t('header.theme')}>
-            {THEMES.map((th) => (
-              <button key={th} type="button" aria-pressed={theme === th} onClick={() => setTheme(th)}>
-                {t(`theme.${th}`)}
-              </button>
-            ))}
-          </div>
-        </div>
-      </details>
+      <div className="lang" role="group" aria-label={t('header.lang')}>
+        {LANGS.map((l) => (
+          <button key={l} type="button" aria-pressed={lang === l} onClick={() => setLang(l)}>
+            {l.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      <select
+        className="theme-select"
+        aria-label={t('header.theme')}
+        value={theme}
+        onChange={(e) => setTheme(e.target.value as ThemePref)}
+      >
+        {THEMES.map((th) => (
+          <option key={th} value={th}>{t(`theme.${th}`)}</option>
+        ))}
+      </select>
       {session ? (
         <div className="user-chip">
           <span className="avatar" title={`${session.user.displayName} · ${session.user.role}`}>
@@ -92,15 +68,6 @@ export function Header() {
         )
       )}
     </header>
-  );
-}
-
-function ThemeIcon() {
-  return (
-    <svg width={16} height={16} viewBox="0 0 16 16" aria-hidden="true">
-      <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor" />
-    </svg>
   );
 }
 

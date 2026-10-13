@@ -89,7 +89,7 @@ export function RevisionView({ revisionId }: { revisionId: string }) {
         <span aria-current="page">{t('route.revision')} #{rev.revisionNumber}</span>
       </nav>
       <div className="route-head">
-        <div className="titles">
+        <div className="titles" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <h1 className="h1">{locText(c.name, lang)}</h1>
           <div className="row-gap" style={{ gap: '1.2rem', alignItems: 'center' }}>
             <span className={`pill${rev.status === 'pending' ? ' pill-blue' : ''}`}>{statusText}</span>
