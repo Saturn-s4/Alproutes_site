@@ -55,3 +55,10 @@ alproutes:
     cron: ${MAINTENANCE_CRON:0 30 3 * * *}
     unattached-photo-ttl: 7d
     duplicate-document-window: 3d
+  places:
+    # Place search on the map. The public Nominatim server: at most 1 request/s, identify the app
+    # (https://operations.osmfoundation.org/policies/nominatim/). Empty URL turns the search off.
+    url: ${PLACES_URL:https://nominatim.openstreetmap.org}
+    user-agent: ${PLACES_USER_AGENT:AlpRoutes/0.1 (dev)}
+    email: ${PLACES_EMAIL:}
+    min-interval: ${PLACES_MIN_INTERVAL:1100ms}
