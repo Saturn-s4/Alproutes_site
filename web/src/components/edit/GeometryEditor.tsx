@@ -8,6 +8,7 @@ import { DEFAULT_VIEW, themeColors } from '@/lib/map-style';
 import { FEATURE_ROLE } from '@/lib/route-features';
 import { formatLatLon, parseCoordinates } from '@/lib/coords';
 import { MapCanvas } from '../MapCanvas';
+import { MapSearch } from '../MapSearch';
 import { usePrefs } from '../Prefs';
 import { TrackImport } from './TrackImport';
 
@@ -288,6 +289,7 @@ export function GeometryEditor({
     setSelected(j);
   };
 
+  const getMap = useCallback(() => mapRef.current, []);
   const flyTo = (lonLat: number[]) => mapRef.current?.easeTo({ center: lonLat as [number, number], zoom: Math.max(mapRef.current.getZoom(), 13) });
 
   /** Typed coordinates: a new point in point mode, the next vertex in line mode. */
@@ -359,6 +361,7 @@ export function GeometryEditor({
       <div className="geo-body">
         <div className="geo-map">
           <MapCanvas center={center ?? DEFAULT_VIEW.center} zoom={center ? 12 : DEFAULT_VIEW.zoom} onReady={onReady} />
+          <MapSearch map={getMap} />
           <div className="map-overlay map-notice">{hint}</div>
         </div>
         <div className="geo-side">

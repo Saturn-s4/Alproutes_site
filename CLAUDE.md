@@ -131,6 +131,7 @@
   - [x] условные знаки в редакторе нитки (набор `shared/topo-symbols`, общий с Android): постановка, подпись (R1…), поворот, масштаб; узоры линий — сплошная, штрих, штрих-пунктир, точки, стрелка
   - [ ] подписи участков в редакторе нитки, комментарии к восхождениям, жалобы, сверка профиля с DEM
 - [ ] **Шаг 5** — веб: фильтры, поиск, профили, экспорт GPX
+  - [x] поиск на карте (главная и редактор геометрии): районы и маршруты каталога, места OpenStreetMap через `GET /places` (прокси к Nominatim: 1 запрос/с, кэш, рельеф выше магазинов; `PLACES_URL` пустой — выключен), координаты
 - [ ] **Шаг 6** — Android MVP, только чтение
 - [ ] **Шаг 7** — Android: пользовательский контент, офлайн-режим (скачивание района целиком), deep links
 
@@ -196,6 +197,9 @@ node shared/topo-symbols/build.mjs
 # Тестовые данные для локальной разработки (сгенерированные, с пометкой «ТЕСТ»; нужен запущенный backend)
 java infra/dev-seed/GenerateSamples.java infra/dev-seed/samples
 node infra/dev-seed/seed.mjs
+
+# Импорт карточки маршрута из подготовленной папки (route.json + files/; нужен запущенный backend)
+node infra/import/import-route.mjs "Claude outputs/import/<папка>"
 
 # Прототип дизайна (деплоится на GitHub Pages workflow'ом .github/workflows/deploy.yml)
 cd web-prototype && npm install && npm run dev

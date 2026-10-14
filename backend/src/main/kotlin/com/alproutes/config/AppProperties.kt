@@ -9,6 +9,7 @@ data class AppProperties(
     val cors: Cors = Cors(),
     val s3: S3,
     val maintenance: Maintenance = Maintenance(),
+    val places: Places = Places(),
 ) {
     data class Auth(
         val jwtSecret: String,
@@ -28,6 +29,22 @@ data class AppProperties(
         /** How far back duplicate documents (a retried POST) are looked for. */
         val duplicateDocumentWindow: Duration = Duration.ofDays(3),
         val batchSize: Int = 500,
+    )
+
+    /** Place search on the map (GET /places), proxied to a Nominatim server. */
+    data class Places(
+        /** Base URL of the Nominatim API; blank turns the search off (503). */
+        val url: String = "",
+        /** Nominatim usage policy: identify the application, give a contact. */
+        val userAgent: String = "AlpRoutes",
+        val email: String = "",
+        /** The public server allows one request per second for the whole application. */
+        val minInterval: Duration = Duration.ofMillis(1100),
+        /** A request that would wait longer than this for its turn gets 429. */
+        val maxWait: Duration = Duration.ofSeconds(3),
+        val timeout: Duration = Duration.ofSeconds(5),
+        val cacheTtl: Duration = Duration.ofHours(24),
+        val cacheSize: Int = 2000,
     )
 
     data class Cors(val allowedOrigins: List<String> = emptyList())

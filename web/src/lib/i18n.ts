@@ -37,6 +37,18 @@ const ru = {
   'map.zoomOut': 'Отдалить',
   'map.truncated': 'Показаны не все маршруты — приблизьте карту',
 
+  'search.label': 'Поиск на карте',
+  'search.placeholder': 'Вершина, район, маршрут или координаты',
+  'search.clear': 'Очистить поиск',
+  'search.goTo': 'Перейти к точке',
+  'search.areas': 'Районы и вершины каталога',
+  'search.routes': 'Маршруты',
+  'search.osm': 'Места OpenStreetMap',
+  'search.osmWait': 'Ищем после паузы в наборе, Enter — сразу',
+  'search.osmUnavailable': 'Поиск OpenStreetMap сейчас недоступен',
+  'search.osmBusy': 'Слишком много запросов, повторите через пару секунд',
+  'search.nothing': 'Ничего не найдено',
+
   'catalog.title': 'Каталог',
   'catalog.routesTitle': 'Каталог маршрутов',
   'catalog.filters': 'Фильтры',
@@ -446,6 +458,18 @@ const en: Record<MessageKey, string> = {
   'map.zoomIn': 'Zoom in',
   'map.zoomOut': 'Zoom out',
   'map.truncated': 'Not all routes are shown — zoom in',
+
+  'search.label': 'Search the map',
+  'search.placeholder': 'Summit, area, route or coordinates',
+  'search.clear': 'Clear search',
+  'search.goTo': 'Go to point',
+  'search.areas': 'Catalogue areas and summits',
+  'search.routes': 'Routes',
+  'search.osm': 'OpenStreetMap places',
+  'search.osmWait': 'Searching once you pause typing, Enter for now',
+  'search.osmUnavailable': 'OpenStreetMap search is unavailable right now',
+  'search.osmBusy': 'Too many requests, try again in a couple of seconds',
+  'search.nothing': 'Nothing found',
 
   'catalog.title': 'Catalogue',
   'catalog.routesTitle': 'Route catalogue',
@@ -919,6 +943,38 @@ export const sourceTypeLabel = (v: SourceTypeValue, lang: Lang) => sourceTypes[v
 
 export const areaTypeLabel = (v: AreaType, lang: Lang) => areaTypes[v][idx(lang)];
 export const routeTypeLabel = (v: RouteTypeValue, lang: Lang) => routeTypes[v][idx(lang)];
+/** OSM `class:type` of a found place, in words; unknown types stay unnamed rather than raw tags. */
+const placeTypes: Record<string, [string, string]> = {
+  peak: ['вершина', 'summit'],
+  volcano: ['вулкан', 'volcano'],
+  saddle: ['перевал', 'pass'],
+  mountain_pass: ['перевал', 'pass'],
+  ridge: ['хребет', 'ridge'],
+  arete: ['гребень', 'arête'],
+  glacier: ['ледник', 'glacier'],
+  cliff: ['скалы', 'cliff'],
+  rock: ['скала', 'rock'],
+  valley: ['долина', 'valley'],
+  gorge: ['ущелье', 'gorge'],
+  water: ['водоём', 'water'],
+  lake: ['озеро', 'lake'],
+  river: ['река', 'river'],
+  stream: ['ручей', 'stream'],
+  alpine_hut: ['приют', 'alpine hut'],
+  wilderness_hut: ['хижина', 'hut'],
+  camp_site: ['стоянка', 'campsite'],
+  city: ['город', 'city'],
+  town: ['город', 'town'],
+  village: ['село', 'village'],
+  hamlet: ['посёлок', 'hamlet'],
+  locality: ['урочище', 'locality'],
+  national_park: ['нацпарк', 'national park'],
+  protected_area: ['заповедник', 'protected area'],
+};
+export function placeCategoryLabel(category: string, lang: Lang): string {
+  const type = category.split(':')[1] ?? '';
+  return placeTypes[type]?.[idx(lang)] ?? '';
+}
 export const featureKindLabel = (v: RouteFeatureKindValue, lang: Lang) => featureKinds[v][idx(lang)];
 
 export function monthName(m: number, lang: Lang) {

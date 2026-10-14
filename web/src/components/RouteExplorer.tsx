@@ -10,6 +10,7 @@ import { formatInt, loc, locText, routeTypeLabel, monthName } from '@/lib/i18n';
 import { DEFAULT_VIEW, themeColors } from '@/lib/map-style';
 import { Grades, primaryGrade } from './Grades';
 import { MapCanvas } from './MapCanvas';
+import { MapSearch } from './MapSearch';
 import { usePrefs } from './Prefs';
 import { Disclaimer, LText, NoData } from './Text';
 
@@ -190,6 +191,9 @@ export function RouteExplorer() {
     [select],
   );
 
+  const getMap = useCallback(() => mapRef.current, []);
+  const onSearchRoute = useCallback((r: RouteSummary) => select(r.slug), [select]);
+
   const flyTo = (r: RouteSummary) => {
     select(r.slug);
     if (r.anchorPoint && mapRef.current) mapRef.current.easeTo({ center: r.anchorPoint.coordinates as [number, number] });
@@ -230,6 +234,7 @@ export function RouteExplorer() {
 
       <main className="map-wrap">
         <MapCanvas center={initialView.center} zoom={initialView.zoom} onReady={onReady} />
+        <MapSearch map={getMap} onRoute={onSearchRoute} />
         <div className="map-overlay map-zoom">
           <button type="button" aria-label={t('map.zoomIn')} onClick={() => mapRef.current?.zoomIn()}>+</button>
           <button type="button" aria-label={t('map.zoomOut')} onClick={() => mapRef.current?.zoomOut()}>−</button>

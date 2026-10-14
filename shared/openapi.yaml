@@ -49,6 +49,8 @@ tags:
   - name: comments
   - name: users
   - name: moderation
+  - name: places
+    description: Поиск мест на карте во внешнем геокодере
 security:
   - bearerAuth: []
 
@@ -176,6 +178,64 @@ paths:
               schema: { $ref: '#/components/schemas/User' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # -------------------------------------------------------------- places
+  /places:
+    get:
+      tags: [places]
+      operationId: searchPlaces
+      summary: Поиск мест в OpenStreetMap
+      description: |
+        Прокси к геокодеру Nominatim: вершины, перевалы, ледники, населённые пункты — то, чего
+        может не быть в каталоге. Ищет только по названию, чтобы переместить карту; это не данные
+        каталога, координаты и названия маршрутам не присваиваются. Клиенты показывают атрибуцию
+        «© OpenStreetMap contributors».
+
+        Порядок — для горной карты: сначала рельеф (вершины, перевалы, ледники, хребты), затем
+        населённые пункты, приюты и стоянки, затем остальное. Магазины, учреждения, дороги и здания
+        отбрасываются: названия вершин часто носят магазины снаряжения.
+
+        Сервер ограничивает частоту запросов к геокодеру (правила Nominatim — не больше одного
+        в секунду) и кэширует ответы. Внешний поиск не листается: `nextCursor` всегда `null`.
+        Геокодер выключен или недоступен — `503`, поиск по каталогу (`GET /areas`, `GET /routes`
+        с `q`) при этом работает.
+      security: [{}, { bearerAuth: [] }]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Название места, минимум 2 символа
+          schema: { type: string, minLength: 2, maxLength: 100 }
+        - name: lang
+          in: query
+          description: Язык названий в ответе
+          schema: { type: string, enum: [ru, en], default: ru }
+        - name: bbox
+          in: query
+          description: |
+            Видимая область карты, `minLon,minLat,maxLon,maxLat`: места внутри неё идут первыми,
+            но поиск ею не ограничен.
+          schema: { type: string, example: '42.9,43.0,43.3,43.2' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10, default: 8 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlacePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429':
+          description: Слишком много запросов к геокодеру, повторить позже
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '503':
+          description: Геокодер выключен или не отвечает
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   # ----------------------------------------------------------- reference
   /grade-systems:
@@ -2032,6 +2092,39 @@ components:
           type: array
           items: { $ref: '#/components/schemas/AreaSummary' }
         nextCursor: { type: string, nullable: true }
+
+    # ------------------------------------------------------------- places
+    Place:
+      type: object
+      description: Место из OpenStreetMap. Только для перемещения карты, не факт о маршруте.
+      required: [id, name, label, category, location]
+      properties:
+        id:
+          type: string
+          description: Объект OSM, `node/123`, `way/456` или `relation/789`
+          example: node/26862675
+        name: { type: string, description: Название на языке запроса, если есть }
+        label: { type: string, description: Полное название с регионом и страной }
+        category:
+          type: string
+          description: Класс и тип объекта OSM через двоеточие
+          example: natural:peak
+        location: { $ref: '#/components/schemas/GeoJsonPoint' }
+        bbox:
+          type: array
+          nullable: true
+          description: '`[minLon, minLat, maxLon, maxLat]` протяжённого объекта (ледник, хребет, село)'
+          minItems: 4
+          maxItems: 4
+          items: { type: number, format: double }
+    PlacePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Place' }
+        nextCursor: { type: string, nullable: true, description: Всегда `null` }
 
     # ------------------------------------------------------------- routes
     RouteType:

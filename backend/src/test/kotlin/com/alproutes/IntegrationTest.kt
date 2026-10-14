@@ -52,6 +52,9 @@ class TestcontainersConfig {
         registry.add("alproutes.s3.endpoint", url)
         registry.add("alproutes.s3.public-endpoint", url)
         registry.add("alproutes.s3.public-base-url") { url() + "/alproutes-public" }
+        // Place search goes to a local stand-in, never to the public Nominatim server.
+        registry.add("alproutes.places.url") { FakeNominatim.url }
+        registry.add("alproutes.places.min-interval") { "0ms" }
     }
 }
 
