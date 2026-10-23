@@ -69,7 +69,7 @@ abstract class IntegrationTest {
     @Autowired lateinit var jdbc: NamedParameterJdbcTemplate
 
     fun login(role: UserRole = UserRole.USER): TokenPair {
-        val user = users.insert("user-${UUID.randomUUID()}@test.local", "Тест", role)
+        val user = users.insert("user-${UUID.randomUUID()}@test.local", "Тест", setOf(role))
         return tokens.issue(user, null)
     }
 

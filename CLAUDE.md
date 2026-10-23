@@ -27,7 +27,7 @@
 | БД | PostgreSQL 16 + PostGIS 3 |
 | Файлы | S3-совместимое хранилище (SeaweedFS локально) |
 | Backend | Kotlin + Spring Boot, REST + OpenAPI |
-| Auth | JWT (access + refresh), OAuth через Google/Apple |
+| Auth | JWT (access + refresh), OAuth через Google |
 | Android | Kotlin, Jetpack Compose, MVI, Room, Ktor Client, WorkManager, Coil |
 | Карта (Android) | MapLibre GL Native |
 | Web | Next.js (App Router), TypeScript, MapLibre GL JS, pdf.js |
@@ -114,7 +114,7 @@
 
 - [x] **Шаг 1** — схема БД и OpenAPI-контракт
 - [ ] **Шаг 2** — backend MVP: CRUD маршрутов, auth, загрузка в S3, геопоиск по bbox
-  - [ ] вход через Google: проверка ID token на backend и кнопка в вебе готовы, нужна проверка с настоящим ключом. Apple — только на backend, в вебе отложен (нужны Apple Developer Program и домен с HTTPS)
+  - [ ] вход через Google: проверка ID token на backend и кнопка в вебе готовы, нужна проверка с настоящим ключом. Вход через Apple не планируется
   - [x] суточная очистка: просроченные слоты загрузки, непривязанные фото старше 7 дней, копии документов от повторных запросов
 - [x] **Шаг 3** — веб: каталог, карта, SSR-страницы районов и маршрутов, редактирование маршрутов (включая геометрию на карте), модерация
   - [x] каркас `/web`, dev-вход, карта с точками, каталог, SSR-страницы района и маршрута (только чтение)

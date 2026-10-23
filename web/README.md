@@ -22,7 +22,7 @@ cd web && npm install && npm run dev
 3. Веб: `GOOGLE_CLIENT_ID=<id>`. Backend: `GOOGLE_CLIENT_IDS=<id>` (через запятую, если клиентов несколько — например, ещё Android).
 
 
-Вход через Apple пока не подключён в вебе: backend его поддерживает (`APPLE_CLIENT_IDS`), но нужны Apple Developer Program и домен с HTTPS.
+Вход через Apple не поддерживается: из провайдеров остаётся только Google.
 
 ## Страницы
 

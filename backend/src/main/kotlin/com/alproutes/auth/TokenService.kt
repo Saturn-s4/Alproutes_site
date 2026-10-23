@@ -11,7 +11,6 @@ import com.alproutes.config.AppProperties
 import com.alproutes.users.UserDto
 import com.alproutes.users.UserRepository
 import com.alproutes.users.UserRow
-import com.alproutes.users.UserStatus
 import com.alproutes.users.toDto
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import com.nimbusds.jose.proc.SecurityContext
@@ -41,7 +40,7 @@ data class TokenPair(
 )
 
 /**
- * Access tokens: short-lived HS256 JWTs (sub = user id, role claim).
+ * Access tokens: short-lived HS256 JWTs (sub = user id, roles claim).
  * Refresh tokens: opaque random strings, only their SHA-256 is stored; rotated on every use.
  */
 @Service
@@ -66,7 +65,7 @@ class TokenService(
             .subject(user.id.toString())
             .issuedAt(now)
             .expiresAt(accessExpires)
-            .claim("role", user.role.wire)
+            .claim("roles", user.roles.sorted().map { it.wire })
             .build()
         val access = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).tokenValue
 
@@ -113,7 +112,7 @@ class TokenService(
         if (row.expiresAt.isBefore(now)) throw unauthorized("Срок refresh token истёк")
 
         val user = users.findById(row.userId) ?: throw unauthorized()
-        if (user.status != UserStatus.ACTIVE) throw unauthorized("Учётная запись заблокирована")
+        if (!user.isActive) throw unauthorized("Учётная запись заблокирована")
 
         jdbc.update("UPDATE refresh_tokens SET revoked_at = now() WHERE id = :id", params { uuid("id", row.id) })
         return issue(user, userAgent, row.familyId)

@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 import { logout } from '@/lib/api/browser';
 import { LANGS, THEMES } from '@/lib/prefs';
 import { usePrefs } from './Prefs';
+import { isModerator } from '@/lib/api/types';
 
 function initials(name: string) {
   return (
@@ -48,7 +49,7 @@ export function Header() {
       <nav className="nav" aria-label={t('nav.main')}>
         <Link href="/" className={navClass(pathname === '/')}>{t('nav.map')}</Link>
         <Link href="/catalog" className={navClass(pathname !== '/' && pathname !== '/login' && pathname !== '/moderation')}>{t('nav.catalog')}</Link>
-        {(session?.user.role === 'moderator' || session?.user.role === 'admin') && (
+        {isModerator(session?.user) && (
           <Link href="/moderation" className={navClass(pathname === '/moderation')}>{t('nav.moderation')}</Link>
         )}
       </nav>
@@ -79,7 +80,7 @@ export function Header() {
       </details>
       {session ? (
         <div className="user-chip">
-          <span className="avatar" title={`${session.user.displayName} · ${session.user.role}`}>
+          <span className="avatar" title={`${session.user.displayName} · ${session.user.roles?.join(', ')}`}>
             {initials(session.user.displayName)}
           </span>
           <button type="button" className="btn btn-sm btn-ghost" onClick={() => void logout()}>

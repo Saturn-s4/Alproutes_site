@@ -93,7 +93,7 @@ export function LoginForm({ config }: { config: LoginConfig }) {
           <h1 className="h1">{t('login.title')}</h1>
           {session && (
             <p className="status-note">
-              {t('login.signedInAs')} {session.user.displayName} ({session.user.role})
+              {t('login.signedInAs')} {session.user.displayName} ({session.user.roles?.join(', ')})
             </p>
           )}
 

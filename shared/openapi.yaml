@@ -60,7 +60,7 @@ paths:
     post:
       tags: [auth]
       operationId: loginWithOAuth
-      summary: Вход через Google или Apple
+      summary: Вход через Google
       description: |
         Клиент получает ID token у провайдера и передаёт его сюда. Сервер проверяет подпись,
         находит или создаёт пользователя и выдаёт пару токенов.
@@ -71,7 +71,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [google, apple]
+            enum: [google]
       requestBody:
         required: true
         content:
@@ -94,7 +94,7 @@ paths:
       summary: Вход без OAuth (только локальная разработка)
       description: |
         Существует только в профиле `dev`; в остальных окружениях эндпоинт не зарегистрирован (`404`).
-        Находит пользователя по email или создаёт его, назначает указанную роль.
+        Находит пользователя по email или создаёт его, добавляет указанную роль к уже имеющимся.
       security: []
       requestBody:
         required: true
@@ -1915,11 +1915,11 @@ components:
       required: [idToken]
       properties:
         idToken: { type: string }
-        nonce: { type: string, description: 'Nonce, использованный при запросе токена (Apple)' }
+        nonce: { type: string, description: 'Nonce, переданный провайдеру при запросе ID token' }
         displayName:
           type: string
           maxLength: 100
-          description: Apple отдаёт имя только при первом входе — клиент передаёт его сюда
+          description: Имя для нового пользователя, если провайдер его не передал
     DevLoginRequest:
       type: object
       required: [email]
@@ -1957,11 +1957,14 @@ components:
       allOf:
         - $ref: '#/components/schemas/UserPublic'
         - type: object
-          required: [locale, role]
+          required: [locale, roles]
           properties:
             email: { type: string, format: email, nullable: true }
             locale: { $ref: '#/components/schemas/LanguageCode' }
-            role: { $ref: '#/components/schemas/UserRole' }
+            roles:
+              type: array
+              description: Роли пользователя; `user` есть у всех
+              items: { $ref: '#/components/schemas/UserRole' }
     UserUpdate:
       type: object
       properties:

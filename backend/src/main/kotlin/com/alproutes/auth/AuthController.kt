@@ -8,7 +8,6 @@ import com.alproutes.common.validate
 import com.alproutes.users.UserRepository
 import com.alproutes.users.UserRole
 import com.alproutes.users.UserRow
-import com.alproutes.users.UserStatus
 import org.springframework.context.annotation.Profile
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -62,7 +61,7 @@ class AuthService(
             )
             u
         }
-        if (user.status != UserStatus.ACTIVE) throw forbidden("Учётная запись заблокирована")
+        if (!user.isActive) throw forbidden("Учётная запись заблокирована")
         jdbc.update(
             "UPDATE user_identities SET last_login_at = now() WHERE provider = :p AND subject = :s",
             params { str("p", provider.wire); str("s", identity.subject) },
@@ -77,8 +76,8 @@ class AuthService(
             req.displayName?.let { check(it.isNotBlank() && it.length <= 100, "displayName", "От 1 до 100 символов") }
         }
         var user = users.findByEmail(req.email) ?: users.insert(req.email, req.displayName ?: req.email.substringBefore('@'))
-        if (req.role != null && req.role != user.role) {
-            users.updateRole(user.id, req.role)
+        if (req.role != null && req.role !in user.roles) {
+            users.grantRoles(user.id, setOf(req.role))
             user = users.findById(user.id)!!
         }
         return tokens.issue(user, userAgent)

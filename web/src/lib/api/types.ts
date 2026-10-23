@@ -24,3 +24,10 @@ export type RouteContentPhoto = S['RouteContentPhoto'];
 export type Document = S['Document'];
 export type RightsStatus = S['RightsStatus'];
 export type SourceType = S['Document']['sourceType'];
+
+/** Moderators and admins see hidden content and the moderation queue. */
+export function isModerator(user: User | null | undefined): boolean {
+  // `roles` may be missing in a session stored before roles became a list; the next refresh fills it.
+  const roles = user?.roles ?? [];
+  return roles.includes('moderator') || roles.includes('admin');
+}

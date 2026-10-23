@@ -4,10 +4,10 @@ import com.alproutes.auth.Caller
 import com.alproutes.common.Wire
 import com.alproutes.common.forbidden
 import com.alproutes.common.notFound
+import com.alproutes.common.odtOrNull
 import com.alproutes.common.params
 import com.alproutes.common.uuid
 import com.alproutes.common.validate
-import com.alproutes.common.wireOf
 import com.fasterxml.jackson.annotation.JsonValue
 import org.springframework.jdbc.core.RowMapper
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -18,14 +18,11 @@ import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
+import java.time.OffsetDateTime
 import java.util.UUID
 
 enum class UserRole(@get:JsonValue override val wire: String) : Wire {
     USER("user"), MODERATOR("moderator"), ADMIN("admin")
-}
-
-enum class UserStatus(@get:JsonValue override val wire: String) : Wire {
-    ACTIVE("active"), BLOCKED("blocked"), DELETED("deleted")
 }
 
 data class UserRow(
@@ -34,9 +31,12 @@ data class UserRow(
     val displayName: String,
     val avatarKey: String?,
     val locale: String,
-    val role: UserRole,
-    val status: UserStatus,
-)
+    val roles: Set<UserRole>,
+    val blockedAt: OffsetDateTime?,
+    val deletedAt: OffsetDateTime?,
+) {
+    val isActive: Boolean get() = blockedAt == null && deletedAt == null
+}
 
 // ---- DTOs (contract: UserPublic, User, UserUpdate)
 
@@ -48,14 +48,14 @@ data class UserDto(
     val avatarUrl: String?,
     val email: String?,
     val locale: String,
-    val role: UserRole,
+    val roles: List<UserRole>,
 )
 
 data class UserUpdate(val displayName: String? = null, val locale: String? = null)
 
 // Avatars become downloadable with the media work of step 4; until then there is no URL.
 fun UserRow.toPublic() = UserPublic(id, displayName, avatarUrl = null)
-fun UserRow.toDto() = UserDto(id, displayName, avatarUrl = null, email = email, locale = locale, role = role)
+fun UserRow.toDto() = UserDto(id, displayName, avatarUrl = null, email = email, locale = locale, roles = roles.sorted())
 
 @Repository
 class UserRepository(private val jdbc: NamedParameterJdbcTemplate) {
@@ -67,34 +67,49 @@ class UserRepository(private val jdbc: NamedParameterJdbcTemplate) {
             displayName = rs.getString("display_name"),
             avatarKey = rs.getString("avatar_key"),
             locale = rs.getString("locale"),
-            role = wireOf(rs.getString("role")),
-            status = wireOf(rs.getString("status")),
+            // Roles unknown to this build (added as data) are ignored rather than failing the request.
+            roles = rs.getString("roles").orEmpty().split(',')
+                .mapNotNullTo(mutableSetOf()) { code -> UserRole.entries.firstOrNull { it.wire == code } },
+            blockedAt = rs.odtOrNull("blocked_at"),
+            deletedAt = rs.odtOrNull("deleted_at"),
         )
     }
 
-    private val columns = "id, email::text AS email, display_name, avatar_key, locale, role, status"
+    private val columns = """
+        u.id, u.email::text AS email, u.display_name, u.avatar_key, u.locale, u.blocked_at, u.deleted_at,
+        (SELECT string_agg(r.code, ',' ORDER BY r.id)
+           FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+          WHERE ur.user_id = u.id) AS roles
+    """.trimIndent()
 
     fun findById(id: UUID): UserRow? =
-        jdbc.query("SELECT $columns FROM users WHERE id = :id", params { uuid("id", id) }, mapper).firstOrNull()
+        jdbc.query("SELECT $columns FROM users u WHERE u.id = :id", params { uuid("id", id) }, mapper).firstOrNull()
 
     fun findByEmail(email: String): UserRow? =
-        jdbc.query("SELECT $columns FROM users WHERE email = CAST(:email AS citext)", params { str("email", email) }, mapper)
+        jdbc.query("SELECT $columns FROM users u WHERE u.email = CAST(:email AS citext)", params { str("email", email) }, mapper)
             .firstOrNull()
 
-    fun insert(email: String?, displayName: String, role: UserRole = UserRole.USER): UserRow {
+    /** Every account holds [UserRole.USER]; [extraRoles] are granted on top of it. */
+    fun insert(email: String?, displayName: String, extraRoles: Set<UserRole> = emptySet()): UserRow {
         val id = UUID.randomUUID()
         jdbc.update(
-            """
-            INSERT INTO users (id, email, display_name, role)
-            VALUES (:id, CAST(:email AS citext), :name, :role)
-            """.trimIndent(),
-            params { uuid("id", id); str("email", email); str("name", displayName.take(100)); str("role", role.wire) },
+            "INSERT INTO users (id, email, display_name) VALUES (:id, CAST(:email AS citext), :name)",
+            params { uuid("id", id); str("email", email); str("name", displayName.take(100)) },
         )
+        grantRoles(id, extraRoles + UserRole.USER)
         return findById(id)!!
     }
 
-    fun updateRole(id: UUID, role: UserRole) {
-        jdbc.update("UPDATE users SET role = :role WHERE id = :id", params { uuid("id", id); str("role", role.wire) })
+    fun grantRoles(id: UUID, roles: Set<UserRole>) {
+        if (roles.isEmpty()) return
+        jdbc.update(
+            """
+            INSERT INTO user_roles (user_id, role_id)
+            SELECT :id, r.id FROM roles r WHERE r.code IN (:codes)
+            ON CONFLICT DO NOTHING
+            """.trimIndent(),
+            params { uuid("id", id) }.addValue("codes", roles.map { it.wire }),
+        )
     }
 
     fun updateProfile(id: UUID, displayName: String?, locale: String?) {
@@ -112,13 +127,13 @@ class UserRepository(private val jdbc: NamedParameterJdbcTemplate) {
     /** Loads the caller and refuses writes from blocked or deleted accounts (their access token may still be valid). */
     fun requireActive(id: UUID): UserRow {
         val user = findById(id) ?: throw forbidden("Учётная запись не найдена")
-        if (user.status != UserStatus.ACTIVE) throw forbidden("Учётная запись заблокирована")
+        if (!user.isActive) throw forbidden("Учётная запись заблокирована")
         return user
     }
 
     fun publicById(ids: Collection<UUID>): Map<UUID, UserPublic> {
         if (ids.isEmpty()) return emptyMap()
-        return jdbc.query("SELECT $columns FROM users WHERE id IN (:ids)", params { uuids("ids", ids.toSet()) }, mapper)
+        return jdbc.query("SELECT $columns FROM users u WHERE u.id IN (:ids)", params { uuids("ids", ids.toSet()) }, mapper)
             .associate { it.id to it.toPublic() }
     }
 }
@@ -145,7 +160,7 @@ class UsersController(private val users: UserRepository) {
     @GetMapping("/users/{userId}")
     fun user(@PathVariable userId: UUID): UserPublic {
         val user = users.findById(userId) ?: throw notFound("Пользователь не найден")
-        if (user.status == UserStatus.DELETED) throw notFound("Пользователь не найден")
+        if (user.deletedAt != null) throw notFound("Пользователь не найден")
         return user.toPublic()
     }
 }

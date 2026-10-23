@@ -10,6 +10,7 @@ import type { Lang } from '@/lib/prefs';
 import { Grades } from '../Grades';
 import { usePrefs } from '../Prefs';
 import { RouteFeaturesMap } from '../RouteFeaturesMap';
+import { isModerator as hasModeratorRole } from '@/lib/api/types';
 
 type RouteRevision = components['schemas']['RouteRevision'];
 type RouteContent = components['schemas']['RouteContent'];
@@ -25,7 +26,7 @@ export function RevisionView({ revisionId }: { revisionId: string }) {
   const [note, setNote] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'missing'>('loading');
-  const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
+  const isModerator = hasModeratorRole(session?.user);
 
   const load = useCallback(async () => {
     const { data } = await api.GET('/route-revisions/{revisionId}', { params: { path: { revisionId } } });
