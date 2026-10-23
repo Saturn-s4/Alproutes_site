@@ -25,7 +25,10 @@ class AuthAndMiscTest : IntegrationTest() {
 
         // Reuse long after rotation = theft: the whole chain is revoked.
         jdbc.update(
-            "UPDATE refresh_tokens SET revoked_at = now() - interval '1 hour' WHERE token_hash = :h",
+            """
+            UPDATE refresh_tokens SET created_at = now() - interval '2 hours', revoked_at = now() - interval '1 hour'
+             WHERE token_hash = :h
+            """.trimIndent(),
             params { }.addValue("h", sha256(secondRefresh)),
         )
         post("/auth/refresh", null, mapOf("refreshToken" to secondRefresh)).expect(401)
@@ -38,7 +41,43 @@ class AuthAndMiscTest : IntegrationTest() {
         assertEquals("unauthorized", res.json["type"].asText())
         assertEquals("application/problem+json", res.result.response.contentType?.substringBefore(';'))
         get("/me", "not-a-jwt").expect(401)
-        assertEquals("moderator", get("/me", token(UserRole.MODERATOR)).expect(200).json["role"].asText())
+        val roles = get("/me", token(UserRole.MODERATOR)).expect(200).json["roles"].map { it.asText() }
+        assertEquals(listOf("user", "moderator"), roles)
+    }
+
+    @Test
+    fun `a user can hold several roles`() {
+        val user = users.insert("multi-${java.util.UUID.randomUUID()}@test.local", "Тест", setOf(UserRole.MODERATOR, UserRole.ADMIN))
+        val token = tokens.issue(user, null).accessToken
+        assertEquals(listOf("user", "moderator", "admin"), get("/me", token).expect(200).json["roles"].map { it.asText() })
+        // Moderator-only endpoint is open to the holder of both roles.
+        get("/moderation/route-revisions", token).expect(200)
+        get("/moderation/route-revisions", token()).expect(403)
+    }
+
+    @Test
+    fun `refresh token lives 35 days from issue`() {
+        val pair = login()
+        val days = java.time.Duration.between(pair.accessTokenExpiresAt, pair.refreshTokenExpiresAt).toDays()
+        assertEquals(34, days) // 35 days minus the 15-minute access token lifetime, truncated
+    }
+
+    @Test
+    fun `blocked account cannot refresh or write and deleted account is hidden`() {
+        val pair = login()
+        val id = pair.user.id
+        jdbc.update("UPDATE users SET blocked_at = now() WHERE id = :id", params { uuid("id", id) })
+        post("/auth/refresh", null, mapOf("refreshToken" to pair.refreshToken)).expect(401)
+        patch("/me", pair.accessToken, mapOf("displayName" to "Новое имя")).expect(403)
+        get("/users/$id").expect(200)
+
+        jdbc.update("UPDATE users SET deleted_at = now() WHERE id = :id", params { uuid("id", id) })
+        get("/users/$id").expect(404)
+    }
+
+    @Test
+    fun `apple sign-in is not available`() {
+        post("/auth/oauth/apple", null, mapOf("idToken" to "x")).expect(404)
     }
 
     @Test

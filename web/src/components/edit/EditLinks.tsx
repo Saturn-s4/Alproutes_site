@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePrefs } from '../Prefs';
+import { isModerator } from '@/lib/api/types';
 
 /**
  * Edit entry points on server-rendered pages. Shown by role on the client: the pages themselves
@@ -20,7 +21,7 @@ export function RouteEditLinks({ routeId, slug }: { routeId: string; slug: strin
 export function AreaEditLinks({ areaId }: { areaId?: string }) {
   const { t, session } = usePrefs();
   if (!session) return null;
-  const moderator = session.user.role === 'moderator' || session.user.role === 'admin';
+  const moderator = isModerator(session.user);
   return (
     <div className="row-gap" style={{ gap: '1rem' }}>
       <Link className="btn btn-sm btn-primary" href={areaId ? `/edit/routes/new?area=${areaId}` : '/edit/routes/new'}>+ {t('ed.newRoute')}</Link>

@@ -74,5 +74,28 @@ INSERT INTO moderation_log (actor_id, action, target_type, target_id) VALUES ('0
 SELECT pg_temp.expect_fail('edit audit log', $q$UPDATE moderation_log SET note='x'$q$);
 SELECT pg_temp.expect_fail('delete audit log', $q$DELETE FROM moderation_log$q$);
 SELECT pg_temp.expect_fail('flag other without note', $q$INSERT INTO moderation_flags (target_type, target_id, reporter_id, reason) VALUES ('route','20000000-0000-0000-0000-000000000009','00000000-0000-0000-0000-000000000001','other')$q$);
+
+-- Users: roles (many-to-many), auth providers, refresh token dates.
+INSERT INTO user_roles (user_id, role_id) SELECT '00000000-0000-0000-0000-000000000002', id FROM roles WHERE code IN ('user', 'moderator');
+SELECT pg_temp.expect_fail('duplicate user role', $q$INSERT INTO user_roles (user_id, role_id) SELECT '00000000-0000-0000-0000-000000000002', id FROM roles WHERE code = 'moderator'$q$);
+SELECT pg_temp.expect_fail('role of unknown user', $q$INSERT INTO user_roles (user_id, role_id) SELECT '00000000-0000-0000-0000-0000000000ff', id FROM roles WHERE code = 'user'$q$);
+SELECT pg_temp.expect_fail('unknown role', $q$INSERT INTO user_roles (user_id, role_id) VALUES ('00000000-0000-0000-0000-000000000002', 32000)$q$);
+INSERT INTO users (id, display_name) VALUES ('00000000-0000-0000-0000-000000000003','Удаляемый');
+INSERT INTO user_roles (user_id, role_id) SELECT '00000000-0000-0000-0000-000000000003', id FROM roles WHERE code = 'user';
+DELETE FROM users WHERE id = '00000000-0000-0000-0000-000000000003';
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM user_roles WHERE user_id = '00000000-0000-0000-0000-000000000003') THEN
+    RAISE EXCEPTION 'FAIL user roles left after user delete';
+  END IF;
+END $$;
+SELECT 'OK   user roles cascade on user delete';
+SELECT pg_temp.expect_fail('unknown auth provider', $q$INSERT INTO user_identities (user_id, provider, subject) VALUES ('00000000-0000-0000-0000-000000000001','apple','s1')$q$);
+INSERT INTO user_identities (user_id, provider, subject) VALUES ('00000000-0000-0000-0000-000000000001','google','s1');
+SELECT pg_temp.expect_fail('expires before created', $q$INSERT INTO refresh_tokens (user_id, family_id, token_hash, created_at, expires_at) VALUES ('00000000-0000-0000-0000-000000000001', gen_random_uuid(), sha256('t1'), now(), now())$q$);
+SELECT pg_temp.expect_fail('revoked before created', $q$INSERT INTO refresh_tokens (user_id, family_id, token_hash, created_at, expires_at, revoked_at) VALUES ('00000000-0000-0000-0000-000000000001', gen_random_uuid(), sha256('t2'), now(), now() + interval '1 day', now() - interval '1 second')$q$);
+INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at, revoked_at) VALUES ('00000000-0000-0000-0000-000000000001', gen_random_uuid(), sha256('t3'), now() + interval '1 day', now());
+INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) VALUES ('00000000-0000-0000-0000-000000000001', gen_random_uuid(), sha256('t4'), now() + interval '1 day');
+SELECT 'OK   token revoked at creation time and not revoked are accepted';
+
 SELECT 'ALL TESTS PASSED';
 ROLLBACK;

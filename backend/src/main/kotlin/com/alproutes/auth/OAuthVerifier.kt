@@ -13,9 +13,8 @@ import org.springframework.security.oauth2.jwt.JwtException
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.stereotype.Component
-import java.security.MessageDigest
 
-enum class OAuthProvider(val wire: String) { GOOGLE("google"), APPLE("apple") }
+enum class OAuthProvider(val wire: String) { GOOGLE("google") }
 
 data class VerifiedIdentity(
     val provider: OAuthProvider,
@@ -25,24 +24,19 @@ data class VerifiedIdentity(
     val name: String?,
 )
 
-/** Verifies ID tokens issued by Google / Apple against their published keys (RS256, JWKS). */
+/** Verifies ID tokens issued by Google against their published keys (RS256, JWKS). */
 @Component
 class OAuthVerifier(props: AppProperties) {
 
     private val googleClients = props.auth.googleClientIds.filter { it.isNotBlank() }
-    private val appleClients = props.auth.appleClientIds.filter { it.isNotBlank() }
 
     private val google by lazy {
         decoder("https://www.googleapis.com/oauth2/v3/certs", setOf("https://accounts.google.com", "accounts.google.com"), googleClients)
-    }
-    private val apple by lazy {
-        decoder("https://appleid.apple.com/auth/keys", setOf("https://appleid.apple.com"), appleClients)
     }
 
     fun verify(provider: OAuthProvider, idToken: String, nonce: String?): VerifiedIdentity {
         val (decoder, clients) = when (provider) {
             OAuthProvider.GOOGLE -> google to googleClients
-            OAuthProvider.APPLE -> apple to appleClients
         }
         if (clients.isEmpty()) {
             throw ApiException(HttpStatus.FORBIDDEN, "forbidden", "Вход через ${provider.wire} не настроен на сервере")
@@ -53,15 +47,13 @@ class OAuthVerifier(props: AppProperties) {
             throw unauthorized("ID token не прошёл проверку")
         }
         if (nonce != null) {
-            // Apple native flows put SHA-256(nonce) into the request; web flows put the raw value.
-            val claim = jwt.getClaimAsString("nonce")
-            if (claim != nonce && claim != sha256Hex(nonce)) throw unauthorized("Nonce не совпадает")
+            if (jwt.getClaimAsString("nonce") != nonce) throw unauthorized("Nonce не совпадает")
         }
         return VerifiedIdentity(
             provider = provider,
             subject = jwt.subject ?: throw unauthorized("В ID token нет sub"),
             email = jwt.getClaimAsString("email"),
-            // Google sends a boolean, Apple a string "true"/"false".
+            // A boolean in Google tokens; compared as text to accept a "true" string as well.
             emailVerified = jwt.claims["email_verified"]?.toString() == "true",
             name = jwt.getClaimAsString("name"),
         )
@@ -82,7 +74,4 @@ class OAuthVerifier(props: AppProperties) {
         if (ok(jwt)) OAuth2TokenValidatorResult.success()
         else OAuth2TokenValidatorResult.failure(OAuth2Error("invalid_token", "Invalid $claim", null))
     }
-
-    private fun sha256Hex(value: String): String =
-        MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 }

@@ -1,6 +1,8 @@
 package com.alproutes.config
 
+import com.alproutes.auth.rolesOf
 import com.alproutes.common.ErrorHandler
+import com.alproutes.users.UserRole
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -79,11 +81,10 @@ class SecurityConfig(private val props: AppProperties, private val mapper: Objec
         return http.build()
     }
 
-    /** Access token claim "role" -> ROLE_USER / ROLE_MODERATOR / ROLE_ADMIN. */
+    /** Access token claim "roles" -> ROLE_USER / ROLE_MODERATOR / ROLE_ADMIN. */
     private fun jwtAuthenticationConverter() = JwtAuthenticationConverter().apply {
         setJwtGrantedAuthoritiesConverter { jwt ->
-            val role = (jwt.getClaimAsString("role") ?: "user").uppercase()
-            listOf<GrantedAuthority>(SimpleGrantedAuthority("ROLE_$role"))
+            rolesOf(jwt).map<UserRole, GrantedAuthority> { SimpleGrantedAuthority("ROLE_" + it.wire.uppercase()) }
         }
     }
 

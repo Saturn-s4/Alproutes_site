@@ -16,6 +16,7 @@ import { currentTopo, type TopoDrawing } from '@/lib/topo';
 import { Field, GradesEditor, LocalizedInput, SignInFirst, AreaPicker } from './Fields';
 import { GeometryEditor } from './GeometryEditor';
 import { TopoEditor } from './TopoEditor';
+import { isModerator as hasModeratorRole } from '@/lib/api/types';
 
 const ROUTE_TYPES: RouteType[] = ['rock', 'snow_ice', 'combined'];
 
@@ -66,7 +67,7 @@ export function RouteEditor({ target }: { target: Target }) {
   /** New route only: GPX/KML files to upload as its tracks right after it is created. */
   const [pendingTracks, setPendingTracks] = useState<File[]>([]);
   const [topo, setTopo] = useState<Record<string, TopoEdit>>({});
-  const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
+  const isModerator = hasModeratorRole(session?.user);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 

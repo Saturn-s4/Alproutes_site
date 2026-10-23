@@ -15,9 +15,9 @@ data class AppProperties(
         val jwtSecret: String,
         val issuer: String = "alproutes",
         val accessTokenTtl: Duration = Duration.ofMinutes(15),
-        val refreshTokenTtl: Duration = Duration.ofDays(60),
+        /** Sliding: every refresh rotates the token, so this is the allowed inactivity window. */
+        val refreshTokenTtl: Duration = Duration.ofDays(35),
         val googleClientIds: List<String> = emptyList(),
-        val appleClientIds: List<String> = emptyList(),
     )
 
     /** Daily cleanup (MaintenanceJob). */

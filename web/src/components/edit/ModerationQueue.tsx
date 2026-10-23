@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api/browser';
 import type { components } from '@/lib/api/schema';
 import type { Document, Photo, RightsStatus } from '@/lib/api/types';
+import { isModerator as hasModeratorRole } from '@/lib/api/types';
 import { currentTopo, type TopoLine } from '@/lib/topo';
 import { formatDate, loc, locText, rightsLabel, sourceTypeLabel } from '@/lib/i18n';
 import { usePrefs } from '../Prefs';
@@ -24,7 +25,7 @@ export function ModerationQueue() {
   const [revisions, setRevisions] = useState<Pending[] | null>(null);
   const [documents, setDocuments] = useState<Document[] | null>(null);
   const [topos, setTopos] = useState<PendingTopo[] | null>(null);
-  const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
+  const isModerator = hasModeratorRole(session?.user);
 
   const load = useCallback(async () => {
     const [revs, docs, lines] = await Promise.all([

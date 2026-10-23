@@ -11,6 +11,7 @@ import { checkFile, UPLOAD_LIMITS, UploadError, untilProcessed, uploadFile } fro
 import { PhotoTopo } from './DescriptionPhotos';
 import { Lightbox, type LightboxItem } from './Lightbox';
 import { usePrefs } from './Prefs';
+import { isModerator as hasModeratorRole } from '@/lib/api/types';
 
 type Ascent = components['schemas']['Ascent'];
 type AscentFields = components['schemas']['AscentFields'];
@@ -46,7 +47,7 @@ export function Ascents({ routeId, initial, nextCursor }: { routeId: string; ini
   const [cursor, setCursor] = useState(nextCursor);
   const [editing, setEditing] = useState<Ascent | 'new' | null>(null);
   const me = session?.user.id;
-  const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
+  const isModerator = hasModeratorRole(session?.user);
 
   // The server render is anonymous: the author also gets own private records.
   useEffect(() => {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, publicApi } from '@/lib/api/browser';
 import type { components } from '@/lib/api/schema';
 import { newId } from '@/lib/edit';
+import { isModerator as hasModeratorRole } from '@/lib/api/types';
 import { formatDate } from '@/lib/i18n';
 import { checkFile, UPLOAD_LIMITS, UploadError, untilProcessed, uploadFile } from '@/lib/upload';
 import { PhotoTopo } from './DescriptionPhotos';
@@ -27,7 +28,7 @@ export function Comments({ routeId, initial, nextCursor }: { routeId: string; in
   const [cursor, setCursor] = useState(nextCursor);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const me = session?.user.id;
-  const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
+  const isModerator = hasModeratorRole(session?.user);
 
   // The server render is anonymous: the author also sees own photos that are still processing.
   useEffect(() => {

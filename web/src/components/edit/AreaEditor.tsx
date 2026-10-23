@@ -12,6 +12,7 @@ import { DEFAULT_VIEW, themeColors } from '@/lib/map-style';
 import { MapCanvas } from '../MapCanvas';
 import { usePrefs } from '../Prefs';
 import { AreaPicker, Field, LocalizedInput, SignInFirst } from './Fields';
+import { isModerator as hasModeratorRole } from '@/lib/api/types';
 
 type AreaType = components['schemas']['AreaType'];
 type ContentStatus = components['schemas']['ContentStatus'];
@@ -33,7 +34,7 @@ export function AreaEditor({ areaId, parentId }: { areaId?: string; parentId?: s
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(!areaId);
-  const isModerator = session?.user.role === 'moderator' || session?.user.role === 'admin';
+  const isModerator = hasModeratorRole(session?.user);
 
   useEffect(() => {
     if (!session) return;
